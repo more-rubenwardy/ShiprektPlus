@@ -146,12 +146,11 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
             return;
         }
         print( "island angles: " + island.angle + " vs " + island_angle );
-
+		f32 angleDiff = island.angle - island_angle;//to account for island angle lag
         CBlob@[]@ blocks;
         if (this.get( "blocks", @blocks ) && blocks.size() > 0)                 
         {
-            PositionBlocks( island, @blocks, island.pos + pos_offset, island.pos + aimPos_offset, target_angle );  
-
+            PositionBlocks( island, @blocks, island.pos + pos_offset.RotateBy( angleDiff ), island.pos + aimPos_offset.RotateBy( angleDiff ), target_angle );
             for (uint i = 0; i < blocks.length; ++i)
             {
                 CBlob@ b = blocks[i];
