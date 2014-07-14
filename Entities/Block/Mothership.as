@@ -5,6 +5,7 @@
 #include "BlockProduction.as"
 
 u16 bombCDTime = 7 * 30;
+u16 BASE_KILL_REWARD = 100;
 
 void onInit( CBlob@ this )
 {
@@ -228,7 +229,8 @@ void onDie( CBlob@ this )
 	Sound::Play( "ShipExplosion", pos );
     makeLargeExplosionParticle(pos);
     ShakeScreen( 190, 180, pos );
-    client_AddToChat( "Team " + teamNum + " ship destroyed." );
+	if ( !this.hasTag( "cleanDeath" ) )
+		client_AddToChat( "*** " + getRules().getTeam( teamNum ).getName() + " killed itself! ***" );
 	
 	//destroy team turrets
 	if ( !getNet().isServer() ) return;
@@ -239,4 +241,45 @@ void onDie( CBlob@ this )
 	for ( u16 t = 0; t < dieBlobs.length; t++ )
 		if ( ( Block::isCannon( Block::getType( dieBlobs[t] ) ) || dieBlobs[t].hasTag( "player" ) ) && dieBlobs[t].getTeamNum() == teamNum )
 			dieBlobs[t].server_Die();			
+}
+
+f32 onHit( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob@ hitterBlob, u8 customData )
+{
+	if ( hitterBlob !is null && !this.hasTag( "cleanDeath" ) && this.getHealth() - damage <= 0.0f )
+	{
+		CRules@ rules = getRules();
+		u8 thisTeamNum = this.getTeamNum();
+		u8 hitterTeamNum = hitterBlob.getTeamNum();
+		
+		if ( thisTeamNum != hitterTeamNum )
+		{
+			u8 thisPlayers = 0;
+			u8 hitterPlayers = 0;
+			u8 playersCount = getPlayersCount();
+			for( u8 i = 0; i < playersCount; i++)
+			{
+				CPlayer@ p = getPlayer(i);
+				u8 pteam = p.getTeamNum();
+				if( pteam == thisTeamNum )
+					thisPlayers++;
+				else if ( pteam == hitterTeamNum )
+					hitterPlayers++;
+			}
+			
+			if ( hitterPlayers > 0 )//in case of suicide against leftover team ship
+			{
+				this.Tag( "cleanDeath" );
+				client_AddToChat( "*** " + rules.getTeam( hitterTeamNum ).getName() + " has destroyed " + rules.getTeam( thisTeamNum ).getName() + "! ***" );
+			
+				if ( getNet().isServer() )
+				{
+					u16 hitterBooty = server_getTeamBooty( hitterTeamNum );
+					server_setTeamBooty( hitterTeamNum, hitterBooty + ( thisPlayers + 1 ) * BASE_KILL_REWARD );
+					//print ( "MothershipKill: " + thisPlayers + " players; " + ( ( thisPlayers + 1 ) * BASE_KILL_REWARD ) + " to " + rules.getTeam( hitterTeamNum ).getName() );
+				}
+			}
+		}
+	}
+	
+	return damage;
 }

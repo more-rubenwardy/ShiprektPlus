@@ -40,7 +40,6 @@ void onInit( CBlob@ this )
 void onTick( CBlob@ this )
 {				
 	Move( this );
-
 	// my player stuff
 
 	if (this.isMyPlayer())
@@ -198,7 +197,7 @@ void Move( CBlob@ this )
 	else
 	{
 		this.getShape().getVars().onground = true;
-		this.getShape().SetAngleDegrees( -forward.Angle() );
+		//this.getShape().SetAngleDegrees( -forward.Angle() );//conflicts with Seat.as?
 	}
 }
 

@@ -197,8 +197,20 @@ void UpdateIslands( CRules@ this, const bool integrate = true )
 				}
 			}
 		}
+
+		//owner change//todo: glitches mass. add mothership check
+		/*if ( getNet().isServer() )
+		{	
+			if ( olderSeatOwner != "" && isle.owner != olderSeatOwner )
+			{
+				CPlayer@ captain = getPlayerByUsername( olderSeatOwner );
+				if ( captain !is null )
+					setIsleTeam( isle, captain.getTeamNum() );
+			}
+		}*/
+		
 		isle.owner = olderSeatOwner;
-		//if( isle.owner != "") 	print( "updated isle " + isle.blocks.length + "; owner: " + isle.owner );
+		//if( isle.owner != "") 	print( "updated isle " + isle.id + "; owner: " + isle.owner );
 
 		isle.soundsPlayed = 0;
 	}	
@@ -280,6 +292,18 @@ void UpdateIslandBlob( CBlob@ blob, Island @isle, IslandBlock@ isle_block )
 
  	blob.setVelocity( Vec2f_zero );
  	blob.setAngularVelocity( 0.0f );
+}
+
+void setIsleTeam( Island @isle, u8 teamNum )
+{
+	print ("setting team for " + isle.id + " to " + teamNum );
+	for (uint b_iter = 0; b_iter < isle.blocks.length; ++b_iter)
+	{			
+		IslandBlock@ isle_block = isle.blocks[b_iter];
+		CBlob@ b = getBlobByNetworkID( isle_block.blobID );
+		if (b !is null)
+			b.server_setTeamNum( teamNum );
+	}
 }
 
 void StoreVelocities( CRules@ this )

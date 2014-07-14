@@ -145,7 +145,6 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
             warn("place cmd: island not found");
             return;
         }
-        print( "island angles: " + island.angle + " vs " + island_angle );
 		f32 angleDiff = island.angle - island_angle;//to account for island angle lag
         CBlob@[]@ blocks;
         if (this.get( "blocks", @blocks ) && blocks.size() > 0)                 

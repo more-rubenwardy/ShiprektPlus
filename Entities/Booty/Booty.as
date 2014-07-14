@@ -1,5 +1,5 @@
 //#define SERVER_ONLY
-const u16 STARTING_TEAM_SCRAP = 500;
+const u16 STARTING_TEAM_BOOTY = 500;
 const u8 numTeams = 8;
  
 void setStartingBooty(CRules@ this)
@@ -7,7 +7,7 @@ void setStartingBooty(CRules@ this)
 	print( "** Setting starting Booty" );
 
 	for ( u8 i = 0; i < numTeams; i++ )
-		server_setTeamBooty( i, STARTING_TEAM_SCRAP );
+		server_setTeamBooty( i, STARTING_TEAM_BOOTY );
 		
 	for ( u8 p = 0; p < getPlayersCount(); ++p )
 		server_setPlayerBooty( getPlayer(p).getUsername(), 0 );

@@ -1,4 +1,4 @@
-#include "IslandsCommon.as" //Commit test
+#include "IslandsCommon.as"
 #include "BlockCommon.as"
 #include "MakeDustParticle.as"
 
@@ -50,12 +50,12 @@ void onCollision( CBlob@ this, CBlob@ blob, bool solid, Vec2f normal, Vec2f poin
 			else if ( other_blockType == Block::COUPLING )
 				DieOrBomb( blob );
 			//blocks against cores
-			else if ( Block::isCore( other_blockType ) && !Block::isCore( blockType ) )
+			else if ( other_blockType == Block::MOTHERSHIP5 && blockType != Block::MOTHERSHIP5 )
 			{
 				this.server_Hit( blob, point1, Vec2f_zero, 2.0f, 0, true );
 				DieOrBomb( this );
 			}
-			else if ( Block::isCore( blockType ) && !Block::isCore( other_blockType ) )
+			else if ( blockType  == Block::MOTHERSHIP5 && other_blockType != Block::MOTHERSHIP5 )
 			{
 				blob.server_Hit( this, point1, Vec2f_zero, 2.0f, 0, true );
 				DieOrBomb( blob );
