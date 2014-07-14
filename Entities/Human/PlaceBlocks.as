@@ -25,7 +25,6 @@ void onTick( CBlob@ this )
             f32 target_angle = this.get_f32("target_angle");//final angle (after manual rotation)
             Vec2f pos = this.getPosition();
             Vec2f aimPos = this.getAimPos();
-
             PositionBlocks( island, @blocks, pos, aimPos, blocks_angle );//positions = absolute
 
             if (island.centerBlock is null){
@@ -41,12 +40,13 @@ void onTick( CBlob@ this )
                 {
                     if (target_angle == blocks_angle && !overlappingIsland )
                     {
-						//PositionBlocks( island, @blocks, island.pos + pos_offset, island.pos + aimPos_offset, target_angle );  
+						//PositionBlocks( island, @blocks, island.pos + pos_offset, island.pos + aimPos_offset, target_angle );//positions = relative
                         CBitStream params;
                         params.write_netid( island.centerBlock.getNetworkID() );//->island
                         params.write_Vec2f( pos - island.pos );//pos_offset
                         params.write_Vec2f( aimPos - island.pos );//aimPos_offset
                         params.write_f32( target_angle );
+                        params.write_f32( island.angle );
                         this.SendCommand( this.getCommandID("place"), params );//account for ship rotation?
                     }
                     else
@@ -137,6 +137,7 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
         Vec2f pos_offset = params.read_Vec2f();
         Vec2f aimPos_offset = params.read_Vec2f();
         const f32 target_angle = params.read_f32();
+        const f32 island_angle = params.read_f32();
 
         Island@ island = getIsland( centerblock.getShape().getVars().customData );
         if (island is null)
@@ -144,7 +145,8 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
             warn("place cmd: island not found");
             return;
         }
-        
+        print( "island angles: " + island.angle + " vs " + island_angle );
+
         CBlob@[]@ blocks;
         if (this.get( "blocks", @blocks ) && blocks.size() > 0)                 
         {
