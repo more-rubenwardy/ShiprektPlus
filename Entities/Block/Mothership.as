@@ -228,7 +228,7 @@ void onDie( CBlob@ this )
 	u8 teamNum = this.getTeamNum();
 	Sound::Play( "ShipExplosion", pos );
     makeLargeExplosionParticle(pos);
-    ShakeScreen( 190, 180, pos );
+    ShakeScreen( 90, 80, pos );
 	if ( !this.hasTag( "cleanDeath" ) )
 		client_AddToChat( "*** " + getRules().getTeam( teamNum ).getName() + " killed itself! ***" );
 	

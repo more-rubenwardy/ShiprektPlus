@@ -40,7 +40,7 @@ void onRender( CRules@ this )
 				" * Gold Xs can only be collected by Motherships.\n"+
 				" * The bigger the X, the more Booty you get.\n"+
 				" * Protect your Mothership Core. Don't let enemies use your seats!\n"+
-				" * Destroy all other ships Cores.\n"+
+				" * Destroying enemy Motherships grants your team Booty.\n"+
 				" * All players on the final surviving team get points - so play nice!\n";
 		Vec2f size;
 		GUI::GetTextDimensions(text, size);

@@ -25,12 +25,14 @@ void onTick( CBlob@ this )
             f32 target_angle = this.get_f32("target_angle");//final angle (after manual rotation)
             Vec2f pos = this.getPosition();
             Vec2f aimPos = this.getAimPos();
-            PositionBlocks( island, @blocks, pos, aimPos, blocks_angle );//positions = absolute
-
-            if (island.centerBlock is null){
-                warn("PlaceBlocks: centerblock not found");
+			CBlob@ refBlob = getIslandBlob( this );
+			
+            if (island.centerBlock is null || refBlob is null ){
+                warn("PlaceBlocks: " + ( island.centerBlock is null ? "centerblock" : "refBlock" ) + " not found");
                 return;
             }
+
+            PositionBlocks( island, @blocks, pos, aimPos, blocks_angle, refBlob );//positions = absolute
 
             if (this.isMyPlayer()) 
             {
@@ -43,6 +45,7 @@ void onTick( CBlob@ this )
 						//PositionBlocks( island, @blocks, island.pos + pos_offset, island.pos + aimPos_offset, target_angle );//positions = relative
                         CBitStream params;
                         params.write_netid( island.centerBlock.getNetworkID() );//->island
+                        params.write_netid( refBlob.getNetworkID() );//->refBlock
                         params.write_Vec2f( pos - island.pos );//pos_offset
                         params.write_Vec2f( aimPos - island.pos );//aimPos_offset
                         params.write_f32( target_angle );
@@ -86,26 +89,33 @@ void onTick( CBlob@ this )
     }
 }
 
-void PositionBlocks( Island@ island, CBlob@[]@ blocks, Vec2f pos, Vec2f aimPos, const f32 blocks_angle )
+void PositionBlocks( Island@ island, CBlob@[]@ blocks, Vec2f pos, Vec2f aimPos, const f32 blocks_angle, CBlob@ refBlock )
 {
-    if (island is null || island.centerBlock is null){
+    if (island is null || island.centerBlock is null || refBlock is null){
         warn("PositionBlocks: centerblock not found");
         return;
     }
-    const f32 angle = island.angle;
+	
+    f32 angle = refBlock.getAngleDegrees();// = island.angle;
     Vec2f mouseAim = aimPos - pos;
     f32 mouseDist = Maths::Min( mouseAim.Normalize(), max_build_distance );
     aimPos = pos + mouseAim * mouseDist;//block position of the 'buildblock' pointer
 
-    Vec2f island_pos = island.centerBlock.getPosition();
-    Vec2f islandAim = aimPos - island.pos;
+    Vec2f island_pos = refBlock.getPosition();// = island.centerBlock.getPosition();
+    Vec2f islandAim = aimPos - island_pos;// = aimPos - island.pos;
     islandAim.RotateBy( -angle );
     islandAim = SnapToGrid( islandAim );
     islandAim.RotateBy( angle );
     Vec2f cursor_pos = island_pos + islandAim;
-
-    // rotate blocks
-
+	
+	//current island.angle as point of reference
+	f32 refAngle = island.angle;
+	while(angle > refAngle + 45)
+		angle -= 90.0f;
+	while(angle < refAngle - 45)
+		angle += 90.0f;
+			
+    //rotate and position blocks
     Vec2f snap;
     for (uint i = 0; i < blocks.length; ++i)
     {
@@ -128,7 +138,8 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
     if (cmd == this.getCommandID("place"))
     {
         CBlob@ centerblock = getBlobByNetworkID( params.read_netid() );
-        if (centerblock is null)
+        CBlob@ refBlock = getBlobByNetworkID( params.read_netid() );
+        if (centerblock is null || refBlock is null)
         {
             warn("place cmd: centerblock not found");
             return;
@@ -149,7 +160,7 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
         CBlob@[]@ blocks;
         if (this.get( "blocks", @blocks ) && blocks.size() > 0)                 
         {
-            PositionBlocks( island, @blocks, island.pos + pos_offset.RotateBy( angleDiff ), island.pos + aimPos_offset.RotateBy( angleDiff ), target_angle );
+            PositionBlocks( island, @blocks, island.pos + pos_offset.RotateBy( angleDiff ), island.pos + aimPos_offset.RotateBy( angleDiff ), target_angle, refBlock );
             for (uint i = 0; i < blocks.length; ++i)
             {
                 CBlob@ b = blocks[i];

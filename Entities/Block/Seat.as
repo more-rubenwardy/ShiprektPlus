@@ -1,9 +1,10 @@
 #include "IslandsCommon.as"
+#include "HumanCommon.as"
 #include "BlockCommon.as"
 #include "BlockProduction.as"
 #include "PropellerForceCommon.as"
 
-const u16 COUPLINGS_COOLDOWN = 30*30;
+const u16 COUPLINGS_COOLDOWN = 20*30;
 
 void onInit( CBlob@ this )
 {
@@ -180,7 +181,7 @@ void onTick( CBlob@ this )
 		this.set_bool( "canProduceCoupling", canProduceCoupling );
 		this.Sync( "canProduceCoupling", true );
 		
-		if ( inv && canProduceCoupling )
+		if ( inv && canProduceCoupling && !Human::isHoldingBlocks(occupier) )
 		{
 			this.set( "couplingCooldown", gameTime + COUPLINGS_COOLDOWN );
 			ProduceBlock( getRules(), occupier, Block::COUPLING, 2 );
@@ -198,7 +199,8 @@ void onTick( CBlob@ this )
 		} 		
 			
 		//only ship 'captain' OR enemy can steer /direct fire
-		if ( isCaptain || occupierTeam != this.getTeamNum() )
+		CPlayer@ islandOwner = getPlayerByUsername( island.owner );
+		if ( isCaptain || ( occupierTeam != this.getTeamNum() && islandOwner !is null && occupierTeam != islandOwner.getTeamNum() ) )
 		{
 			//propellers
 			const f32 power = -1;
