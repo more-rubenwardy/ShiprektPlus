@@ -12,19 +12,14 @@ void onInit( CBlob@ this )
 void onTick( CBlob@ this )
 {	
 	//standing on block based rotation
-	CBlob@[] overlapping;
-	this.getOverlapping( @overlapping );
-	if ( overlapping.length > 0 )
+	CBlob@ refBlob = getIslandBlob( this );
+	if ( refBlob !is null )
 	{	
 		CCamera@ camera = getCamera();
 		if (camera !is null)
 		{
-			f32 nearest_angle = camera.getRotation();		
-			for ( int i = 0; i < overlapping.length; i++ )
-					if ( overlapping[i].getName() == "block" && overlapping[i].get_u16("ownerID") == 0 )// && this.getShape().getVars().customData > 0 )
-						nearest_angle = overlapping[i].getAngleDegrees();
-
 			f32 camAngle = camera.getRotation();
+			f32 nearest_angle = refBlob.getAngleDegrees();
 					
 			while(nearest_angle > camAngle + 45)
 				nearest_angle -= 90.0f;

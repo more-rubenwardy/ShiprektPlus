@@ -2,7 +2,7 @@
 #include "BlockCommon.as"
 
 const f32 BASE_DAMAGE = 0.5f;
-const f32 SPLASH_RADIUS = 16.0f;
+const f32 SPLASH_RADIUS = 8.0f;
 
 void onInit( CBlob@ this )
 {
@@ -58,7 +58,7 @@ void onTick( CBlob@ this )
 
 				this.server_Hit( b, pos,
                                  Vec2f_zero, BASE_DAMAGE,
-                                 0, true);					
+                                 0, true );					
 			}
 		}
 	}
@@ -82,7 +82,7 @@ void onDie( CBlob@ this )
 		{
 			CBlob @b = blobsInRadius[i];
 			if ( b.getName() == "block" && b.getShape().getVars().customData > 0 )
-				b.Damage( BASE_DAMAGE/4.0f, null );
+				this.server_Hit( b, Vec2f_zero, Vec2f_zero, BASE_DAMAGE/5.0f, 0, false );
 		}
 	}
 }

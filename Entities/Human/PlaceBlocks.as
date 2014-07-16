@@ -96,34 +96,27 @@ void PositionBlocks( Island@ island, CBlob@[]@ blocks, Vec2f pos, Vec2f aimPos, 
         return;
     }
 	
-    f32 angle = refBlock.getAngleDegrees();// = island.angle;
-    Vec2f mouseAim = aimPos - pos;
-    f32 mouseDist = Maths::Min( mouseAim.Normalize(), max_build_distance );
-    aimPos = pos + mouseAim * mouseDist;//block position of the 'buildblock' pointer
-
-    Vec2f island_pos = refBlock.getPosition();// = island.centerBlock.getPosition();
-    Vec2f islandAim = aimPos - island_pos;// = aimPos - island.pos;
-    islandAim.RotateBy( -angle );
-    islandAim = SnapToGrid( islandAim );
-    islandAim.RotateBy( angle );
-    Vec2f cursor_pos = island_pos + islandAim;
-	
-	//current island.angle as point of reference
-	f32 refAngle = island.angle;
-	while(angle > refAngle + 45)
+    f32 angle = refBlock.getAngleDegrees();
+	//current island.angle as reference
+	while(angle > island.angle + 45)
 		angle -= 90.0f;
-	while(angle < refAngle - 45)
+	while(angle < island.angle - 45)
 		angle += 90.0f;
-			
+		
+    Vec2f mouseAim = aimPos - pos;//player to mouse-position vector
+    f32 mouseDist = Maths::Min( mouseAim.Normalize(), max_build_distance );
+    aimPos = pos + mouseAim * mouseDist;//position of the 'buildblock' pointer
+    Vec2f island_pos = refBlock.getPosition();//island.centerBlock.getPosition();
+    Vec2f islandAim = aimPos - island_pos;//island to buildblock-position vector
+    islandAim.RotateBy( -angle );    islandAim = SnapToGrid( islandAim );    islandAim.RotateBy( angle );
+    Vec2f cursor_pos = island_pos + islandAim;//position of snapped buildblock
+
     //rotate and position blocks
-    Vec2f snap;
     for (uint i = 0; i < blocks.length; ++i)
     {
         CBlob @block = blocks[i];
         Vec2f offset = block.get_Vec2f("offset");
         offset.RotateBy(blocks_angle);                        
-        if (i == 0)
-            snap = (cursor_pos + offset) - SnapToGrid( cursor_pos + offset );
         offset.RotateBy(angle);                
   
         block.setPosition( cursor_pos + offset );//align to island grid

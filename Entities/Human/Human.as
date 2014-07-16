@@ -366,7 +366,7 @@ void Punch( CBlob@ this )
 	this.set_u32("punch time", getGameTime());	
 
 	CBlob@[] blobsInRadius;
-	if (this.getMap().getBlobsInRadius( pos, this.getRadius()*3.0f, @blobsInRadius ))
+	if (this.getMap().getBlobsInRadius( pos, this.getRadius()*4.0f, @blobsInRadius ))
 	{
 		for (uint i = 0; i < blobsInRadius.length; i++)
 		{

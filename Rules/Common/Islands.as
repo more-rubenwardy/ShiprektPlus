@@ -177,7 +177,8 @@ void UpdateIslands( CRules@ this, const bool integrate = true )
 
 		string olderSeatOwner = "";
 		u32 mostTicks = 0;
-
+		CBlob@ mothership = null;
+		
 		for (uint b_iter = 0; b_iter < isle.blocks.length; ++b_iter)
 		{			
 			IslandBlock@ isle_block = isle.blocks[b_iter];
@@ -195,6 +196,11 @@ void UpdateIslands( CRules@ this, const bool integrate = true )
 						olderSeatOwner = seatOwner;
 					}
 				}
+				
+				if ( b.hasTag( "mothership" ) )
+				{
+					@mothership = b;
+				}
 			}
 		}
 
@@ -210,6 +216,8 @@ void UpdateIslands( CRules@ this, const bool integrate = true )
 		}*/
 		
 		isle.owner = olderSeatOwner;
+		if ( mothership !is null )
+			mothership.set_string( "captain", isle.owner );
 		//if( isle.owner != "") 	print( "updated isle " + isle.id + "; owner: " + isle.owner );
 
 		isle.soundsPlayed = 0;

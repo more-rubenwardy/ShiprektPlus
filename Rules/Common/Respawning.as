@@ -166,7 +166,15 @@ void onTick( CRules@ this )
 				}
 				
 				if ( cores.length == 1 )
-					this.SetGlobalMessage( this.getTeam( cores[0].getTeamNum() ).getName() + " Wins!" );
+				{
+					string captain = cores[0].get_string( "captain" );
+					if ( captain != "" )
+					{
+						string lastChar = captain.substr( captain.length() -1 );
+						captain += lastChar == "s" ? "' " : "'s ";
+					}
+					this.SetGlobalMessage( captain + this.getTeam( cores[0].getTeamNum() ).getName() + " Wins!" );
+				}
 				else
 					this.SetGlobalMessage( "Game Over! It's a tie!" );
 					
