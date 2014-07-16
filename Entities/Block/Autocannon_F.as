@@ -2,19 +2,19 @@
 #include "BlockCommon.as"
 #include "IslandsCommon.as"
  
-const f32 BULLET_SPREAD = 1.0f;
+const f32 BULLET_SPREAD = 5.0f;
 const f32 BULLET_RANGE = 240.0F;
-const f32 MIN_FIRE_PAUSE = 3.2f;//min wait between shots
+const f32 MIN_FIRE_PAUSE = 3.0f;//min wait between shots
 const f32 MAX_FIRE_PAUSE = 8.0f;//max wait between shots
 //todo: should be done with 1 factor value
-const f32 FIRE_PAUSE_DECREASE_FACTOR = 0.85f;//how fast it recuperates
-const f32 FIRE_PAUSE_INCREASE_FACTOR = 1.09f;//how quick it slows down
+const f32 FIRE_PAUSE_DECREASE = 0.08f;//how quickly it recuperates
+const f32 FIRE_PAUSE_INCREASE = 0.04f;//how quickly it slows down
  
 Random _shotspreadrandom(0x11598); //clientside
  
 void onInit( CBlob@ this )
 {
-	this.getCurrentScript().tickFrequency = 10;
+	this.getCurrentScript().tickFrequency = 2;
 
 	this.Tag("turret");
 	this.Tag("fixed_gun");
@@ -56,22 +56,45 @@ void onTick( CBlob@ this )
 		
 	f32 currentFirePause = this.get_f32("fire pause");
 	if (currentFirePause > MIN_FIRE_PAUSE)
-		this.set_f32("fire pause", currentFirePause * FIRE_PAUSE_DECREASE_FACTOR);
+		this.set_f32("fire pause", currentFirePause - FIRE_PAUSE_DECREASE * this.getCurrentScript().tickFrequency);
        
 	//print( "Fire pause: " + currentFirePause );
+	
+	CSprite@ sprite = this.getSprite();
+    CSpriteLayer@ laser = sprite.getSpriteLayer( "laser" );
+	
+	if (laser !is null)
+	{		
+		if ( this.get_u32("fire time") + 2.5f < getGameTime() )
+		{		
+			sprite.RemoveSpriteLayer("laser");
+		}
+	}
 }
  
 bool canShoot( CBlob@ this )
 {
 	return ( this.get_u32("fire time") + this.get_f32("fire pause") < getGameTime() );
 }
+
+bool canIncreaseFirePause( CBlob@ this )
+{
+	return ( this.get_u32("fire time min") + MIN_FIRE_PAUSE < getGameTime() );
+}
  
 void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
 {
     if (cmd == this.getCommandID("fire"))
     {
-		if (canShoot(this))    
+		if (canIncreaseFirePause(this))    
 		{
+			f32 currentFirePause = this.get_f32("fire pause");
+			if ( currentFirePause < MAX_FIRE_PAUSE )
+				this.set_f32("fire pause", currentFirePause + FIRE_PAUSE_INCREASE * MIN_FIRE_PAUSE);
+		}
+			
+		if (canShoot(this))    
+		{		
 			//autocannon effects
 			CSprite@ sprite = this.getSprite();
 			CSpriteLayer@ layer = sprite.getSpriteLayer( "turret" );
@@ -89,14 +112,17 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
 			Vec2f aimvector = Vec2f(1, 0).RotateBy(this.getAngleDegrees());
 		   	   
 			Vec2f barrelOffset;
+			Vec2f barrelOffsetRelative;
 			if (this.get_string("barrel") == "left")
 			{
-				barrelOffset = Vec2f(0, -3.0).RotateBy(-aimvector.Angle());
+				barrelOffsetRelative = Vec2f(0, -2.0);
+				barrelOffset = Vec2f(0, -2.0).RotateBy(-aimvector.Angle());
 				this.set_string("barrel", "right");
 			}
 			else
 			{
-				barrelOffset = Vec2f(0, 3.0).RotateBy(-aimvector.Angle());
+				barrelOffsetRelative = Vec2f(0, 2.0);
+				barrelOffset = Vec2f(0, 2.0).RotateBy(-aimvector.Angle());
 				this.set_string("barrel", "left");
 			}	   
 				
@@ -110,7 +136,21 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
 			HitInfo@[] hitInfos;
 			CMap@ map = this.getMap();
 			bool killed = false;
-			if( map.getHitInfosFromRay( pos, -aimvector.Angle(), BULLET_RANGE, this, @hitInfos ) )
+			
+			f32 offsetAngle = _shotspreadrandom.NextFloat() * BULLET_SPREAD;
+			if (XORRandom(2) == 0)
+			{
+				offsetAngle = -offsetAngle;		
+			}
+			aimvector.RotateBy(offsetAngle);
+			
+			f32 rangeOffset = _shotspreadrandom.NextFloat() * BULLET_SPREAD * 4.0f;
+			if (XORRandom(2) == 0)
+			{
+				rangeOffset = -rangeOffset;	
+			}
+				
+			if( map.getHitInfosFromRay( pos, -aimvector.Angle(), BULLET_RANGE + rangeOffset, this, @hitInfos ) )
 			{
 				for (uint i = 0; i < hitInfos.length; i++)
 				{
@@ -137,6 +177,26 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
 								continue;
 						}
 						
+						sprite.RemoveSpriteLayer("laser");
+						CSpriteLayer@ laser = sprite.addSpriteLayer("laser", "Beam1.png", 16, 16);
+						if (laser !is null)
+						{
+							Animation@ anim = laser.addAnimation( "default", 1, false );
+							anim.AddFrame(0);
+							anim.AddFrame(1);
+							anim.AddFrame(2);
+							anim.AddFrame(3);
+							anim.AddFrame(4);
+							anim.AddFrame(5);
+							laser.SetVisible(true);
+						}
+						f32 laserLength = Maths::Max(0.1f, (hi.hitpos - pos).getLength() / 16.0f);						
+						laser.ResetTransform();						
+						laser.ScaleBy( Vec2f(laserLength, 0.5f) );							
+						laser.TranslateBy( Vec2f(laserLength*8.0f + 8.0f, barrelOffsetRelative.y) );							
+						laser.RotateBy( offsetAngle, Vec2f());
+						laser.setRenderStyle(RenderStyle::light);
+						
 						hitEffects(b, hi.hitpos);
 						
 						if ( getNet().isServer() )
@@ -148,13 +208,31 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
 			}
 			
 			if ( !killed )
-				MakeWaterParticle( pos + aimvector * BULLET_RANGE, Vec2f_zero );
+			{
+				sprite.RemoveSpriteLayer("laser");
+				CSpriteLayer@ laser = sprite.addSpriteLayer("laser", "Beam1.png", 16, 16);
+				if (laser !is null)
+				{
+					Animation@ anim = laser.addAnimation( "default", 1, false );
+					anim.AddFrame(0);
+					anim.AddFrame(1);
+					anim.AddFrame(2);
+					anim.AddFrame(3);
+					anim.AddFrame(4);
+					anim.AddFrame(5);
+					laser.SetVisible(true);
+				}
+				f32 laserLength = Maths::Max(0.1f, (aimvector * (BULLET_RANGE + rangeOffset)).getLength() / 16.0f);						
+				laser.ResetTransform();						
+				laser.ScaleBy( Vec2f(laserLength, 0.5f) );							
+				laser.TranslateBy( Vec2f(laserLength*8.0f + 8.0f, barrelOffsetRelative.y) );								
+				laser.RotateBy( offsetAngle, Vec2f());
+				laser.setRenderStyle(RenderStyle::light);				
+				
+				MakeWaterParticle( pos + aimvector * (BULLET_RANGE + rangeOffset), Vec2f_zero );
+			}
 			
 			this.set_u32("fire time", getGameTime());
-			
-			f32 currentFirePause = this.get_f32("fire pause");
-			if ( currentFirePause < MAX_FIRE_PAUSE )
-				this.set_f32("fire pause", Maths::Pow(currentFirePause, FIRE_PAUSE_INCREASE_FACTOR) );
 		}
     }
 }
