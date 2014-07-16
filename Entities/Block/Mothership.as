@@ -177,7 +177,7 @@ void BuildShopMenu( CBlob@ this, CBlob@ caller, string description, Vec2f offset
 			params.write_string( "wood" );
 				
 			CGridButton@ button = menu.AddButton( "$WOOD$", "Wood $" + c.wood, this.getCommandID("buyBlock"), params );
-			button.SetHoverText( "Good quality wood floor panel. Get that deck shinning :)\nWeight: " + w.wood * 100 + "rkt\n" );
+			button.SetHoverText( "Good quality wood floor panel. Get that deck shining :)\nWeight: " + w.wood * 100 + "rkt\n" );
 		}
 		{
 			CBitStream params;
