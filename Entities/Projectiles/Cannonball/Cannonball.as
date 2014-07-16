@@ -1,7 +1,7 @@
 #include "WaterEffects.as"
 #include "BlockCommon.as"
 
-const f32 BASE_DAMAGE = 0.5f;
+const f32 BASE_DAMAGE = 0.6f;
 const f32 SPLASH_RADIUS = 8.0f;
 
 void onInit( CBlob@ this )
@@ -74,6 +74,9 @@ void onDie( CBlob@ this )
 	MakeWaterParticle( this.getPosition(), Vec2f_zero);
 	this.getSprite().PlaySound("WaterSplashBall.ogg");
 	
+	if ( !getNet().isServer() ) 
+		return;
+		
 	Vec2f pos = this.getPosition();
 	CBlob@[] blobsInRadius;
 	if (getMap().getBlobsInRadius( pos, SPLASH_RADIUS, @blobsInRadius ))
@@ -92,7 +95,7 @@ void sparks(Vec2f pos, int amount)
 {
 	for (int i = 0; i < amount; i++)
     {
-        Vec2f vel(_sprk_r.NextFloat() * 7.0f, 0);
+        Vec2f vel(_sprk_r.NextFloat() * 5.0f, 0);
         vel.RotateBy(_sprk_r.NextFloat() * 360.0f);
 
         CParticle@ p = ParticlePixel( pos, vel, SColor( 255, 255, 128+_sprk_r.NextRanged(128), _sprk_r.NextRanged(128)), true );
@@ -122,23 +125,23 @@ void onHitBlob( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob
 	else
 	if (Block::isSolid(blockType) || Block::isCore(blockType) || blockType == Block::SEAT || hitBlob.hasTag( "turret" ) )
 	{
-		sparks(worldPoint, 32);
-		if(Block::isCore(blockType)){
+		if ( worldPoint != Vec2f_zero )
+			sparks(worldPoint, 15);
+			
+		if(Block::isCore(blockType))
 			Sound::Play( "Entities/Characters/Knight/ShieldHit.ogg", worldPoint );
-		}
 		else 
 		{		
 			Sound::Play( "Entities/Items/Explosives/Bomb.ogg", worldPoint );
 			
 			//extra damage per block type
-			if ( Block::isPropeller( blockType ) )//kills in 2 hits
+			if ( false )//kills in 2 hits
 				hitBlob.Damage( 1.5f, null );
-			if ( hitBlob.hasTag( "turret" ) || blockType == Block::SEAT )//kills in 3 hits
+			if (  Block::isPropeller( blockType ) || hitBlob.hasTag( "turret" ) || blockType == Block::SEAT )//kills in 3 hits
 				hitBlob.Damage( 0.5f, null );
-														//rest: 4hits
+														//rest: 6hits
 		}
 	}
 	else
 		hitBlob.server_Die();
-
 }

@@ -1,6 +1,4 @@
-//#define SERVER_ONLY
 #include "Default/DefaultGUI.as"
-#include "Default/DefaultLoaders.as"
 #include "Booty.as"
 #include "BlockCommon.as"
 
@@ -29,15 +27,13 @@ void onInit(CRules@ this)
     sv_visiblity_scale = 2.0f;
 
 	this.set_u16( "projectiles", 0 );
-	string[] quitList;
-	this.set( "quitList", quitList );
 }
 
 void onTick(CRules@ this)
 {
 	this.set_u16( "projectiles", 0 );
 	//check for minimum resources
-	if ( getNet().isServer() && getGameTime() % 300 == 0 )
+	if ( getNet().isServer() && getGameTime() % 200 == 0 )
 	{	
 		Block::Costs@ c = Block::getCosts( this );
 		if ( c is null )
@@ -45,8 +41,9 @@ void onTick(CRules@ this)
 			warn( "** Couldn't get Costs! (onTick)" );
 			return;
 		}
-
-		for ( int i = 0; i < numTeams; i++ )
+		
+		u8 teamsNum = this.getTeamsNum();
+		for ( int i = 0; i < teamsNum; i++ )
 		{
 			u16 booty = server_getTeamBooty(i);
 			if ( booty < c.propeller )
@@ -65,14 +62,6 @@ void onRestart(CRules@ this)
 {
 	if (getNet().isServer() )
 		setStartingBooty(this);
-}
-
-void onPlayerLeave( CRules@ this, CPlayer@ player )
-{
-	string[]@ quitList;
-	this.get( "quitList", @quitList );
-	
-	quitList.push_back( player.getUsername() );
 }
 
 void onBlobCreated( CRules@ this, CBlob@ blob )

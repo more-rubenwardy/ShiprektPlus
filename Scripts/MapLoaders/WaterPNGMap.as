@@ -11,6 +11,7 @@ bool LoadMap( CMap@ map, const string& in fileName )
 
 #include "CustomMap.as";
 #include "LoadMapUtils.as";
+#include "Booty.as"
 
 class PNGLoader
 {
@@ -28,7 +29,8 @@ class PNGLoader
 		{
 			CMap::SetupMap( map, 0, 0 );
 			return true;
-		}
+		}else
+			SetupBooty( getRules() );
 
 		@image = CFileImage( filename );		
 		if (image.isLoaded())

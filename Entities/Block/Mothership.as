@@ -217,7 +217,7 @@ void BuildShopMenu( CBlob@ this, CBlob@ caller, string description, Vec2f offset
 			params.write_string( "coupling" );
 				
 			CGridButton@ button = menu.AddButton( "$COUPLING$", "Coupling $" + c.coupling, this.getCommandID("buyBlock"), params );
-			button.SetHoverText( "A versatile block used to hold and release other blocks.\nWeight: " + w.coupling * 200 + "rkt\n" );
+			button.SetHoverText( "A versatile block used to hold and release other blocks. They stick to each other on collision.\nWeight: " + w.coupling * 200 + "rkt\n" );
 		}
 	}
 }

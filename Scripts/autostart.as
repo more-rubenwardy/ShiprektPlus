@@ -3,7 +3,6 @@ void Configure()
     s_soundon = 1; // sound on
     v_driver = 5;  // default video driver
     sv_gamemode = "TDM";
-    //AddMod("Shiprekt+v3");
 }
 
 void InitializeGame()

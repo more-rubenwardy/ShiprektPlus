@@ -3,7 +3,6 @@ void Configure()
     v_driver = 0;  // disable video
     s_soundon = 0; // disable audio
     sv_gamemode = "TDM";
-    AddMod("Shiprekt");
 }
 
 void InitializeGame()
