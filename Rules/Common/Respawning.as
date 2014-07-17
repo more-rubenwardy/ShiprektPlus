@@ -2,7 +2,7 @@
 
 #include "Characters.as"
 
-const string PLAYER_BLOB = "template";
+const string PLAYER_BLOB = "human";
 const string SPAWN_TAG = "mothership";
 
 bool oneTeamLeft = false;
