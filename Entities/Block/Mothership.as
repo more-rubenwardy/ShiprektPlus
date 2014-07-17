@@ -201,7 +201,7 @@ void BuildShopMenu( CBlob@ this, CBlob@ caller, string description, Vec2f offset
 			params.write_string( "cannon" );
 				
 			CGridButton@ button = menu.AddButton( "$CANNON$", "Cannon $" + c.cannon, this.getCommandID("buyBlock"), params );
-			button.SetHoverText( "Good against Solid blocks. Does some splash damage.\nWeight: " + w.cannon * 100 + "rkt\n" );
+			button.SetHoverText( "Good against Solid blocks. Deals some splash damage.\nWeight: " + w.cannon * 100 + "rkt\n" );
 		}
 		{
 			CBitStream params;

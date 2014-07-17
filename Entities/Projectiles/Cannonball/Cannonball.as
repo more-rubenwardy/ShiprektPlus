@@ -2,7 +2,7 @@
 #include "BlockCommon.as"
 
 const f32 BASE_DAMAGE = 0.6f;
-const f32 SPLASH_RADIUS = 8.0f;
+const f32 SPLASH_RADIUS = 12.0f;
 
 void onInit( CBlob@ this )
 {
@@ -85,7 +85,7 @@ void onDie( CBlob@ this )
 		{
 			CBlob @b = blobsInRadius[i];
 			if ( b.getName() == "block" && b.getShape().getVars().customData > 0 )
-				this.server_Hit( b, Vec2f_zero, Vec2f_zero, BASE_DAMAGE/5.0f, 0, false );
+				this.server_Hit( b, Vec2f_zero, Vec2f_zero, BASE_DAMAGE/5.0f, 9, false );
 		}
 	}
 }
@@ -109,7 +109,10 @@ void sparks(Vec2f pos, int amount)
 
 
 void onHitBlob( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob@ hitBlob, u8 customData )
-{            
+{   
+	if ( customData == 9 )
+		return;
+	
 	CSprite@ sprite = hitBlob.getSprite();
 	const int blockType = sprite.getFrame();
 
@@ -125,8 +128,7 @@ void onHitBlob( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob
 	else
 	if (Block::isSolid(blockType) || Block::isCore(blockType) || blockType == Block::SEAT || hitBlob.hasTag( "turret" ) )
 	{
-		if ( worldPoint != Vec2f_zero )
-			sparks(worldPoint, 15);
+		sparks(worldPoint, 15);
 			
 		if(Block::isCore(blockType))
 			Sound::Play( "Entities/Characters/Knight/ShieldHit.ogg", worldPoint );
@@ -134,14 +136,17 @@ void onHitBlob( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob
 		{		
 			Sound::Play( "Entities/Items/Explosives/Bomb.ogg", worldPoint );
 			
-			//extra damage per block type
-			if ( false )//kills in 2 hits
-				hitBlob.Damage( 1.5f, null );
-			if (  Block::isPropeller( blockType ) || hitBlob.hasTag( "turret" ) || blockType == Block::SEAT )//kills in 3 hits
-				hitBlob.Damage( 0.5f, null );
-														//rest: 6hits
+			if ( getNet().isServer() )
+			{
+				//extra damage per block type
+				if ( false )//kills in 2 hits
+					hitBlob.Damage( 1.5f, null );
+				if (  Block::isPropeller( blockType ) || hitBlob.hasTag( "turret" ) || blockType == Block::SEAT )//kills in 3 hits
+					hitBlob.Damage( 1.0f, null );
+				if ( false )//kills in 4 hits
+					hitBlob.Damage( 0.5f, null );
+															//rest: 6hits
+			}
 		}
 	}
-	else
-		hitBlob.server_Die();
 }
