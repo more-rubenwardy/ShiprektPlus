@@ -5,6 +5,8 @@
 #include "IslandsCommon.as"
 #include "BlockCommon.as"
 
+#include "Characters.as"
+
 int useClickTime = 0;
 f32 zoom = 1.0f;
 const f32 ZOOM_SPEED = 0.1f;
@@ -371,7 +373,7 @@ void Punch( CBlob@ this )
 		for (uint i = 0; i < blobsInRadius.length; i++)
 		{
 			CBlob @b = blobsInRadius[i];
-			if (b !is this && b.getTeamNum() != this.getTeamNum() && b.getName() == "human")
+			if (b !is this && b.getTeamNum() != this.getTeamNum() && Characters::isCharacter( b ))
 			{
 				Vec2f vector = b.getPosition() - pos;
 				if (vector * aimvector > 0.0f)
