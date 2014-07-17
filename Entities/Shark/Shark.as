@@ -1,5 +1,7 @@
 #include "WaterEffects.as"
 
+#include "Characters.as"
+
 const f32 SHARK_SPEED = 0.75f;
 f32 zoom = 1.0f;
 const f32 ZOOM_SPEED = 0.2f;
@@ -126,7 +128,7 @@ Vec2f getTargetVel( CBlob@ this )
 		for (uint i = 0; i < blobsInRadius.length; i++)
 		{
 			CBlob @b = blobsInRadius[i];
-			if (!b.isOnGround() && b.getName() == "human")
+			if (!b.isOnGround() && Characters::isCharacter( b ))
 			{
 				humansInWater++;
 				f32 dist = (pos - b.getPosition()).getLength();
@@ -160,7 +162,7 @@ void onCollision( CBlob@ this, CBlob@ blob, bool solid, Vec2f normal, Vec2f poin
 		return;
 	}
 
-	if (blob.getName() == "human" && !blob.isOnGround())
+	if (Characters::isCharacter( blob ) && !blob.isOnGround())
 	{
 		MakeWaterParticle(this.getPosition(), Vec2f_zero); 		
 		this.getSprite().PlaySound("ZombieBite");

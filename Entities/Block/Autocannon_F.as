@@ -1,6 +1,8 @@
 #include "WaterEffects.as"
 #include "BlockCommon.as"
 #include "IslandsCommon.as"
+
+#include "Characters.as"
  
 const f32 BULLET_SPREAD = 5.0f;
 const f32 BULLET_RANGE = 240.0F;
@@ -241,7 +243,7 @@ f32 getDamage( CBlob@ hitBlob )
 {            
 	const int blockType = Block::getType( hitBlob );
 
-	if ( hitBlob.getName() == "shark" || hitBlob.getName() == "human"  )
+	if ( hitBlob.getName() == "shark" || Characters::isCharacter( hitBlob ) )
 		return 0.5f;
 
 	if( Block::isBomb( blockType ) )

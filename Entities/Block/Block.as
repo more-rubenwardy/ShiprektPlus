@@ -2,6 +2,8 @@
 #include "BlockCommon.as"
 #include "MakeDustParticle.as"
 
+#include "Characters.as"
+
 // onInit: called from engine after blob is created with server_CreateBlob()
 
 void onInit( CBlob@ this )
@@ -101,7 +103,7 @@ void onCollision( CBlob@ this, CBlob@ blob, bool solid, Vec2f normal, Vec2f poin
 		// solid block vs player
 		if (Block::isSolid(blockType))
 		{
-			if (!blob.isAttached() && blob.getName() == "human")
+			if (!blob.isAttached() && Characters::isCharacter( blob ))
 			{
 				Vec2f pos = blob.getPosition();
 				
@@ -140,7 +142,7 @@ void onDie(CBlob@ this)
 	        for (uint i = 0; i < overlapping.length; i++)
 	        {
 	            CBlob@ b = overlapping[i];
-	            if (b.getName() == "human" &&
+	            if ( Characters::isCharacter( b ) &&
 	            	b.getDistanceTo(this) < 6.0f)
 	            {
 	            	b.server_Die();

@@ -1,6 +1,8 @@
 #define SERVER_ONLY
 
-const string PLAYER_BLOB = "human";
+#include "Characters.as"
+
+const string PLAYER_BLOB = "template";
 const string SPAWN_TAG = "mothership";
 
 bool oneTeamLeft = false;
@@ -300,7 +302,7 @@ void onPlayerRequestTeamChange( CRules@ this, CPlayer@ player, u8 newteam )
 
     if (newteam == this.getSpectatorTeamNum())
     { 
-        if (blob !is null && blob.getName() == "human")
+        if (blob !is null && Characters::isCharacter( blob ))
             SpawnAsShark( this, player);
     }
 

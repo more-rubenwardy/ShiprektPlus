@@ -1,6 +1,8 @@
 #include "BlockCommon.as"
 #include "IslandsCommon.as"
 
+#include "Characters.as"
+
 const f32 CANNONBALL_SPEED = 6.0f;
 const f32 CANNONBALL_SPREAD = 0.0f;
 const int FIRE_RATE = 45;
@@ -54,7 +56,7 @@ void Auto( CBlob@ this )
 			for (uint i = 0; i < blobsInRadius.length; i++)
 			{
 				CBlob @b = blobsInRadius[i];
-				if (b.getTeamNum() != this.getTeamNum() && (b.getName() == "human" || b.hasTag("turret") || b.hasTag("mothership")) && b.get_u16("ownerID") == 0)
+				if (b.getTeamNum() != this.getTeamNum() && ( Characters::isCharacter( b ) || b.hasTag("turret") || b.hasTag("mothership")) && b.get_u16("ownerID") == 0)
 				{				
 					Vec2f bpos = b.getPosition();
 					f32 dist = (bpos - pos).getLength();
