@@ -2,6 +2,8 @@
 
 Version v11
 
+License: WTFPL or CC0.
+
 # Changes
 
 ## Features
