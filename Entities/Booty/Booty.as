@@ -1,6 +1,5 @@
-//#define SERVER_ONLY
-const u16 STARTING_TEAM_BOOTY = 500;
- 
+//Booty related functions. mostly server-side that sync to clients
+
 void SetupBooty( CRules@ this )
 {
 	if ( getNet().isServer() )
@@ -8,7 +7,7 @@ void SetupBooty( CRules@ this )
 		dictionary@ current_bSet;
 		if ( !this.get( "BootySet", @current_bSet ) )
 		{
-			print( "** Setting Booty Dict" );
+			print( "** Setting Booty Dictionary" );
 			dictionary bSet;
 			this.set( "BootySet", bSet );
 		}
@@ -26,45 +25,68 @@ dictionary@ getBootySet()
 void setStartingBooty( CRules@ this )
 {
 	//reset properties
+	print( "** SetStartingBooty routine" );
 	dictionary@ bootySet = getBootySet();
+	/*//causes seg faults
 	string[]@ bKeys = bootySet.getKeys();
 	for ( u8 i = 0; i < bKeys.length; i++ )
+	{
+		print( bKeys[i] );
 		this.set_u16( bKeys[i], 0 );
+	}*/
 	
-	bootySet.deleteAll();//clear booty. note: sometimes crashes server?
-	
-	u8 teamsNum = this.getTeamsNum();
-	print( "** Setting Starting Booty for " + teamsNum + " teams" );
-	for ( u8 i = 0; i < teamsNum; i++ )
-		server_setTeamBooty( i, STARTING_TEAM_BOOTY );
-		
-	//just so it syncs with (connected) clients
+	//bootySet.deleteAll();//clear booty
+	dictionary bSet;
+	this.set( "BootySet", bSet );
+
+	print( "** Setting Starting Player Booty ");
+
+	u16 initBooty = this.get_u16( "starting_booty" );
 	for ( u8 p = 0; p < getPlayersCount(); ++p )
-		server_setPlayerBooty( getPlayer(p).getUsername(), 0 );
+		server_setPlayerBooty( getPlayer(p).getUsername(), sv_test ? 9999 : initBooty );
 }
 
-//team
-u16 server_getTeamBooty( u8 teamNum )
-{
-	if ( getNet().isServer() )
-	{
-		u16 tBooty;
-		if ( getBootySet().get( "bootyTeam" + teamNum, tBooty ) )
-			return tBooty;
-	}
-	return 0;
-}
- 
-void server_setTeamBooty( u8 teamNum, u16 booty )
+void server_updateTotalBooty( u8 teamNum, u16 ammount )
 {
 	if (getNet().isServer())
 	{
-		getBootySet().set( "bootyTeam" + teamNum, booty );
-		//sync to clients
 		CRules@ rules = getRules();
-		rules.set_u16( "bootyTeam" + teamNum, booty );
-		rules.Sync( "bootyTeam" + teamNum, true );
+		u16 totalBooty = rules.get_u16( "bootyTeam_total" + teamNum );
+		u16 roundedBooty = Maths::Round( totalBooty/10 ) * 10;
+		u16 newBooty = totalBooty + ammount;
+		u16 newRoundedBooty = Maths::Round( newBooty/10 ) * 10;
+		rules.set_u16( "bootyTeam_total" + teamNum, totalBooty + ammount );
+		if ( roundedBooty != newRoundedBooty )
+		{
+			rules.Sync( "bootyTeam_total" + teamNum, true );
+				
+			//set booty median
+			u32 allBooty = 0;
+			CBlob@[] cores;
+			if ( getBlobsByTag( "mothership", @cores ) )
+			{
+				for ( u8 i = 0; i < cores.length; i++ )
+					allBooty += rules.get_u16( "bootyTeam_total" + cores[i].getTeamNum() );
+				
+				rules.set_u32( "bootyTeam_median", allBooty/cores.length + 1 );
+				rules.Sync( "bootyTeam_median", true );
+			}
+		}
 	}
+}
+
+void server_resetTotalBooty( CRules@ this )
+{
+	if ( !getNet().isServer() )
+		return;
+		
+	u8 teamsNum = this.getTeamsNum();
+	for ( int teamNum = 0; teamNum < teamsNum; teamNum++ )
+	{
+		this.set_u16( "bootyTeam_total" + teamNum, 0 );
+		this.Sync(  "bootyTeam_total" + teamNum, true );
+	}
+	this.set_u32( "bootyTeam_median", 1 );
 }
 
 //player
@@ -88,5 +110,8 @@ void server_setPlayerBooty( string name, u16 booty )
 		CRules@ rules = getRules();
 		rules.set_u16( "booty" + name, booty );
 		rules.Sync( "booty" + name, true );
+		CPlayer@ player = getPlayerByUsername( name );
+		if ( player !is null )
+			player.setScore( booty );
 	}
 }

@@ -1,19 +1,22 @@
 #include "BlockCommon.as"
+#include "AccurateSoundPlay.as"
 
 void onInit( CBlob@ this )
 {
 	this.set_string("seat label", "");
 	this.set_u8("seat icon", 0);
-
 	this.addCommandID("get in seat");
 	this.Tag("seat");
 }
 
 void GetButtonsFor( CBlob@ this, CBlob@ caller )
-{	
+{
+	string seatOwner = this.get_string( "playerOwner" );
 	if(this.getDistanceTo(caller) > Block::BUTTON_RADIUS_FLOOR 
+		|| ( seatOwner != "" && caller.getTeamNum() == this.getTeamNum() && seatOwner != caller.getPlayer().getUsername() )
 		|| this.getShape().getVars().customData <= 0
-		|| this.hasAttached())
+		|| this.hasAttached()
+		|| this.exists( "seatEnabled" ))
 		return;
 
 	CBitStream params;
@@ -25,21 +28,24 @@ void onCommand( CBlob@ this, u8 cmd, CBitStream @params )
 {
     if (cmd == this.getCommandID("get in seat"))
     {
-		CBlob@ caller = getBlobByNetworkID( params.read_netid() );
-		if (caller !is null)
+		if ( getNet().isServer() )
 		{
-			this.server_AttachTo( caller, "SEAT" );
+			string seatOwner;
+			this.get( "playerOwner", seatOwner );
+			CBlob@ caller = getBlobByNetworkID( params.read_netid() );
+			if ( caller !is null &&  ( seatOwner == "" || caller.getTeamNum() != this.getTeamNum() || seatOwner == caller.getPlayer().getUsername() ) )
+				this.server_AttachTo( caller, "SEAT" );
 		}
-    }
+	}
 }
 
 void onAttach( CBlob@ this, CBlob@ attached, AttachmentPoint @attachedPoint )
-{  
-	this.getSprite().PlaySound("GetInVehicle.ogg");
+{
+	directionalSoundPlay( "GetInVehicle.ogg", this.getPosition() );
 }
 
 void onDetach( CBlob@ this, CBlob@ detached, AttachmentPoint @attachedPoint )
-{  
-	this.getSprite().PlaySound("GetInVehicle.ogg");
+{
+	directionalSoundPlay( "GetInVehicle.ogg", this.getPosition() );
 	this.getShape().getVars().onground = true;
 }

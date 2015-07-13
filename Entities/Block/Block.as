@@ -1,9 +1,9 @@
 #include "IslandsCommon.as"
 #include "BlockCommon.as"
 #include "MakeDustParticle.as"
+#include "AccurateSoundPlay.as"
 
-#include "Characters.as"
-
+u8 DAMAGE_FRAMES = 3;
 // onInit: called from engine after blob is created with server_CreateBlob()
 
 void onInit( CBlob@ this )
@@ -11,8 +11,172 @@ void onInit( CBlob@ this )
 	CSprite @sprite = this.getSprite();
 	CShape @shape = this.getShape();
 	sprite.asLayer().SetLighting( false );
+	sprite.SetZ(510.0f);
 	shape.getConsts().net_threshold_multiplier = -1.0f;
 	this.SetMapEdgeFlags( u8(CBlob::map_collide_none) | u8(CBlob::map_collide_nodeath) );
+}
+
+void onTick ( CBlob@ this )
+{
+	CSprite@ thisSprite = this.getSprite();
+	
+	if (this.getTickSinceCreated() < 1) //accounts for time after block production
+	{
+		CRules@ rules = getRules();
+		const int blockType = thisSprite.getFrame();
+		
+		u16 cost = Block::getCost( blockType );	
+		if ( blockType == Block::MOTHERSHIP1 || blockType == Block::MOTHERSHIP2 || blockType == Block::MOTHERSHIP3
+				|| blockType == Block::MOTHERSHIP4 || blockType == Block::MOTHERSHIP6
+				|| blockType == Block::MOTHERSHIP7 || blockType == Block::MOTHERSHIP8 || blockType == Block::MOTHERSHIP9
+				|| blockType == Block::PLATFORM2 )
+		{
+			cost = 15;
+		}
+		
+		this.set_u32("cost", cost);
+		
+		this.set_f32("initial reclaim", this.getHealth());		
+		if ( blockType == Block::STATION )
+		{
+			this.set_f32("current reclaim", 0.0f);
+		}
+		else
+		{
+			this.set_f32("current reclaim", this.getHealth());
+		}
+		
+		//Set Owner
+		if ( getNet().isServer() )
+		{
+			CBlob@ owner = getBlobByNetworkID( this.get_u16( "ownerID" ) );    
+			if ( owner !is null )
+			{
+				this.set_string( "playerOwner", owner.getPlayer().getUsername() );
+				this.Sync( "playerOwner", true );
+			}
+		}
+	}
+	
+	//path predicted collisions
+	const int color = this.getShape().getVars().customData;
+	if ( color > 0 )
+	{
+		Island@ island = getIsland(color);
+		if ( island !is null && !island.isStation )
+		{
+			Vec2f velnorm = island.vel; 
+			const f32 vellen = velnorm.Normalize();		
+			
+			if ( vellen > 4.0f ) 
+			{						
+				bool dontHitMore = false;
+			
+				HitInfo@[] hitInfos;
+				if( getMap().getHitInfosFromRay( this.getPosition(), -island.vel.Angle(), island.vel.Length()*2.0f, this, @hitInfos ) )
+				{
+					//HitInfo objects are sorted, first come closest hits
+					for ( uint i = 0; i < hitInfos.length; i++ )
+					{
+						CBlob@ blob =  hitInfos[i].blob;	  
+						if( blob is null || blob is this || dontHitMore ) 
+							continue;
+						
+						const int other_color = blob.getShape().getVars().customData;
+						
+						if ( color == other_color )
+							break;
+						
+						if ( other_color > 0 )
+						{
+							Island@ other_island = getIsland(other_color);
+						
+							if ( other_island !is null )
+							{
+								const int blockType = thisSprite.getFrame();
+								const int other_blockType = blob.getSprite().getFrame();
+								
+								bool docking = ( blockType == Block::COUPLING || other_blockType == Block::COUPLING ) 
+													&& ( ( island.isMothership || other_island.isMothership ) || ( island.isStation || other_island.isStation ) )
+													&& this.getTeamNum() == blob.getTeamNum()
+													&& ( ( !island.isMothership && island.owner != "" ) || ( !other_island.isMothership && other_island.owner != "" ) );
+													
+								bool ramming = ( blockType == Block::RAM || other_blockType == Block::RAM
+													|| blockType == Block::RAMENGINE || other_blockType == Block::RAMENGINE
+													|| blockType == Block::SEAT || other_blockType == Block::SEAT
+													|| blockType == Block::COUPLING || other_blockType == Block::COUPLING );
+
+								Vec2f velnorm = island.vel; 
+								velnorm.Normalize();
+
+								if ( (!docking && !ramming) )
+								{
+									CollisionResponse1( island, other_island, this.getPosition()+velnorm, docking );
+								}
+								dontHitMore = true;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+ 	// push merged ships away from each other
+	bool blocksColliding = false;
+	/*
+	const uint count = this.getTouchingCount();
+		
+	for (uint step = 0; step < count; ++step)
+	{
+		CBlob@ blob = this.getTouchingByIndex(step);
+		
+		if ( blob is null || this.hasTag( "noCollide" ) || blob.hasTag( "noCollide" ) )	
+			return;
+		
+		const int other_color = blob.getShape().getVars().customData;
+		if (color > 0 && other_color > 0 && color != other_color) // block vs block
+		{
+			const int blockType = thisSprite.getFrame();
+			const int other_blockType = blob.getSprite().getFrame();
+		
+			Island@ other_island = getIsland(other_color);
+			
+			if ( island is null || other_island is null )
+				return;
+				
+			bool docking = ( blockType == Block::COUPLING || other_blockType == Block::COUPLING ) 
+								&& ( ( island.isMothership || other_island.isMothership ) || ( island.isStation || other_island.isStation ) )
+								&& this.getTeamNum() == blob.getTeamNum()
+								&& ( ( !island.isMothership && island.owner != "" ) || ( !other_island.isMothership && other_island.owner != "" ) );
+								
+			bool ramming = ( blockType == Block::RAM || other_blockType == Block::RAM
+								|| blockType == Block::RAMENGINE || other_blockType == Block::RAMENGINE
+								|| blockType == Block::SEAT || other_blockType == Block::SEAT
+								|| blockType == Block::COUPLING || other_blockType == Block::COUPLING );
+								
+			if ( docking || ramming )
+				return;
+				
+			Vec2f point2 = island.pos + (other_island.pos-island.pos)/2.0f;
+			
+			if (this.get_bool( "colliding" ) == true)
+				CollisionResponse2( island, other_island, point2 );
+			
+			blocksColliding = true;
+		}
+	}
+	*/
+	
+	if ( blocksColliding == false && this.get_bool( "colliding" ) == true )
+		this.set_bool( "colliding", false ); 
+
+	if ( !getNet().isServer() )	//awkward fix for blob team changes wiping up the frame state (rest on islands.as)
+	{
+		u8 frame = this.get_u8( "frame" );
+		if ( thisSprite.getFrame() == 0 && frame != 0 )
+			thisSprite.SetFrame( frame );
+	}
 }
 
 // onCollision: called once from the engine when a collision happens; 
@@ -20,82 +184,171 @@ void onInit( CBlob@ this )
 
 void onCollision( CBlob@ this, CBlob@ blob, bool solid, Vec2f normal, Vec2f point1 )
 {
-	if (blob is null) { // exit if this is a tilemap collision
-		return;
-	}
+	if ( blob is null || this.hasTag( "noCollide" ) || blob.hasTag( "noCollide" ) )	return;
 
-	// get this blobs and the other blobs island color stored in a temporary engine variable
+	f32 this_health = this.getHealth();
+	f32 other_health = blob.getHealth();
+	f32 this_initialHealth = this.getInitialHealth();
+	f32 other_initialHealth = blob.getInitialHealth();
 	const int color = this.getShape().getVars().customData;
 	const int other_color = blob.getShape().getVars().customData;
 	if (color > 0 && other_color > 0 && color != other_color) // block vs block
 	{
 		Island@ island = getIsland(color);
 		Island@ other_island = getIsland(other_color);
-		if ( island !is null && island.vel.Length() == 0 && other_island !is null && other_island.vel.Length() == 0 )
-		{
-			//print( "** Glitched collision" );
-			return;
-		}
-		// solid blocks are stronger than others
+	
 		const int blockType = this.getSprite().getFrame();
-		const bool solid = Block::isSolid(blockType) || blockType == Block::BOMB;
+		const bool solid = Block::isSolid(blockType);
 		const int other_blockType = blob.getSprite().getFrame();
-		const bool other_solid = Block::isSolid(other_blockType) || blockType == Block::BOMB;
-		const bool docking = blockType == Block::COUPLING && other_blockType == Block::COUPLING && this.getTeamNum() == blob.getTeamNum();
+		const bool other_solid = Block::isSolid(other_blockType);
+		bool docking;
+		bool ramming;
+		
+		if ( island !is null && other_island !is null )
+		{
+			if ( island.vel.Length() < 0.01f && other_island.vel.Length() < 0.01f )
+				return;
+				
+			docking = ( blockType == Block::COUPLING || other_blockType == Block::COUPLING ) 
+								&& ( ( island.isMothership || other_island.isMothership ) || ( island.isStation || other_island.isStation ) )
+								&& this.getTeamNum() == blob.getTeamNum()
+								&& ( ( !island.isMothership && island.owner != "" ) || ( !other_island.isMothership && other_island.owner != "" ) );
+								
+			ramming = ( blockType == Block::RAM || other_blockType == Block::RAM
+							|| blockType == Block::RAMENGINE || other_blockType == Block::RAMENGINE
+							|| blockType == Block::SEAT || other_blockType == Block::SEAT
+							|| blockType == Block::COUPLING || other_blockType == Block::COUPLING );
+		}
+		else
+			docking = false;
+			
+		if ( (!docking && !ramming) )
+		{
+			bool shouldCollide = true;
+			for (uint b_iter = 0; b_iter < island.blocks.length; ++b_iter)
+			{
+				IslandBlock@ isle_block = island.blocks[b_iter];
+				if(isle_block is null) continue;
 
-		if (getNet().isServer())
-		{		
+				CBlob@ block = getBlobByNetworkID( isle_block.blobID );
+				if(block is null) continue;
+				
+				if ( block.get_bool( "colliding" ) == true )
+					shouldCollide = false;
+			}
+			
+			if ( shouldCollide )
+				this.set_bool( "colliding", true );		
+			
+			if ( this.get_bool( "colliding" ) == true )
+			{
+				CollisionResponse1( island, other_island, point1, docking );
+			}
+		}		
+		
+		if (getNet().isServer() && !(blockType == Block::STATION || other_blockType == Block::STATION) )
+		{
 			if ( docking )//force island merge
 				getRules().set_bool("dirty islands", true);
-			else if ( blockType == Block::COUPLING )//couplings don't do 'damage'. only one of them dies
-				DieOrBomb( this );
-			else if ( other_blockType == Block::COUPLING )
-				DieOrBomb( blob );
-			//blocks against cores
-			else if ( other_blockType == Block::MOTHERSHIP5 && blockType != Block::MOTHERSHIP5 )
+			else if ( blockType == Block::COUPLING || other_blockType == Block::COUPLING )//couplings don't deal damage
 			{
-				this.server_Hit( blob, point1, Vec2f_zero, 2.0f, 0, true );
-				DieOrBomb( this );
+				if ( blockType == Block::COUPLING )
+					Die( this );
+				
+				if ( other_blockType == Block::COUPLING )
+					Die( blob );
 			}
-			else if ( blockType  == Block::MOTHERSHIP5 && other_blockType != Block::MOTHERSHIP5 )
+			else if ( Block::isRepulsor( blockType ) || Block::isRepulsor( other_blockType ) )//repulsors don't deal damage
 			{
-				blob.server_Hit( this, point1, Vec2f_zero, 2.0f, 0, true );
-				DieOrBomb( blob );
+				if ( Block::isRepulsor( blockType ) )
+					Die( this );
+				
+				if ( Block::isRepulsor( other_blockType ) )
+					Die( blob );
 			}
-			//propellers and non-solids do partial damage to solid blocks
 			else
 			{
-				if ( solid )
+				if ( blockType == Block::RAMENGINE )//ram engines deal slight damage
 				{
-					if ( !other_solid || Block::isPropeller( other_blockType ) )
+					if ( blob.hasTag( "weapon" ) ) 
 					{
-						blob.server_Hit( this, point1, Vec2f_zero, 0.75f, 0, true );
-						DieOrBomb( blob );
+						this.server_Hit( blob, point1, Vec2f_zero, 1.1f, 0, true );
+						Die( this );
 					}
+					else if ( other_blockType == Block::PROPELLER || other_blockType == Block::SOLID )
+					{
+						this.server_Hit( blob, point1, Vec2f_zero, 2.1, 0, true );
+						Die( this );
+					}	
+					else if ( other_blockType == Block::PLATFORM )
+					{
+						Die( blob );
+						Die( this );
+					}				
 					else
-						DieOrBomb( this );
+					{
+						this.server_Hit( blob, point1, Vec2f_zero, 1.1f, 0, true );
+						Die( this );
+					}
 				}
-				
-				if ( other_solid )
+				if ( blockType == Block::SEAT || other_blockType == Block::SEAT )//seats don't deal damage
 				{
-					if ( !solid || Block::isPropeller( blockType ) )
-					{
-						this.server_Hit( blob, point1, Vec2f_zero, 0.75f, 0, true );
-						DieOrBomb( this );
-					}
-					else
-						DieOrBomb( blob );
+					if ( blockType == Block::SEAT )
+						Die( this );
+					
+					if ( other_blockType == Block::SEAT )
+						Die( blob );
 				}
-				
-				if ( !solid && this !is null )
-					DieOrBomb( this );
-				
-				if ( !other_solid && blob !is null )
-					DieOrBomb( blob );
+				if ( Block::isBomb( blockType ) || Block::isBomb( other_blockType ) ) //bombs annihilate all
+				{
+					Die( this );
+					Die( blob );
+				}
+				if ( blockType == Block::RAM )//Ram vs all
+				{
+					if ( other_blockType == Block::MOTHERSHIP5)
+					{
+						blob.server_Hit( this, point1, Vec2f_zero, other_solid ? 0.75f : 0.37f, 0, true );
+						Die( this );
+					}
+					else if ( other_blockType == Block::PROPELLER )
+					{
+						this.server_Hit( this, point1, Vec2f_zero, 2.2f, 0, true );
+						Die( blob );
+					}
+					else if ( other_blockType == Block::RAMENGINE )
+					{
+						this.server_Hit( this, point1, Vec2f_zero, 1.1f, 0, true );
+						Die( blob );
+					}
+					else if ( other_blockType == Block::SOLID )
+					{
+						Die( this );
+						Die( blob );
+					}
+					else if ( blob.hasTag( "weapon" ) )
+					{
+						if ( other_health >= this_health )
+						{
+							Die( this );
+							this.server_Hit( blob, point1, Vec2f_zero, solid ? this_health : this_health/2.0f, 0, true );
+						}
+						else
+						{
+							Die( blob );
+							blob.server_Hit( this, point1, Vec2f_zero, 2.0f, 0, true );
+						}
+					}
+					else if (!other_solid && other_island !is null)
+					{
+						this.server_Hit( this, point1, Vec2f_zero, 1.1f, 0, true );
+						Die( blob );
+					}
+					else 
+						Die( blob );
+				}
 			}
 		}
-	
-		CollisionResponse( island, other_island, point1, docking );
 	}
 	else if (other_color == 0 && color > 0)
 	{
@@ -103,161 +356,258 @@ void onCollision( CBlob@ this, CBlob@ blob, bool solid, Vec2f normal, Vec2f poin
 		// solid block vs player
 		if (Block::isSolid(blockType))
 		{
-			if (!blob.isAttached() && Characters::isCharacter( blob ))
+			Vec2f pos = blob.getPosition();
+			
+			if ( getNet().isClient() && !blob.isAttached() && blob.getName() == "human" && blob.isMyPlayer() )
 			{
-				Vec2f pos = blob.getPosition();
-				
-				blob.setPosition( pos + normal * -(blob.getRadius() * 0.4f) );
-
-				// kill by impact
+				//kill by impact
 				Island@ island = getIsland(color);
-				if (!blob.isOnGround() && blob.get_s8( "stay count" ) <= 0 && (island.vel.getLength() > 1.0f || Maths::Abs(island.angle_vel) > 1.0f)){
-					blob.server_Die();
+				if ( island !is null && this.getTeamNum() != blob.getTeamNum() && ( getGameTime() - blob.get_u32( "groundTouch time" ) < 15 )/*longer wasOnGround*/
+					&& ( island.vel.LengthSquared() > 4.0f || Maths::Abs(island.angle_vel) > 1.75f || blob.getOldVelocity().LengthSquared() > 9.0f ) )
+				{
+					CPlayer@ player = blob.getPlayer();
+					if ( player !is null )
+					{
+						player.client_ChangeTeam(44);//this makes the sv kill the playerblob (Respawning.as)
+						blob.Tag( "dead" );
+						CSprite@ sprite = blob.getSprite();
+						if ( sprite !is null && !sprite.getVars().gibbed )//to mask the latency a bit
+						{
+							directionalSoundPlay( "SR_ManDeath" + ( XORRandom(4) + 1 ), pos );
+							sprite.Gib();
+						}
+					}
+				}
+				
+				//set position collision
+				blob.setPosition( pos + normal * -blob.getRadius() * 0.55f );
+			}
+		}
+	}
+}
+
+void CollisionResponse1( Island@ island, Island@ other_island, Vec2f point1, bool docking = false )
+{
+	if ( island is null || other_island is null )
+		return;
+		
+	if ( island.mass <= 0 || other_island.mass <= 0 )
+		return;
+	
+	Vec2f velnorm = island.vel; 
+	const f32 vellen = velnorm.Normalize();
+	Vec2f other_velnorm = other_island.vel; 
+	const f32 other_vellen = other_velnorm.Normalize();
+	
+	Vec2f colvec1 = point1 - island.pos;
+	Vec2f colvec2 = point1 - other_island.pos;
+	colvec1.Normalize();
+	colvec2.Normalize();
+
+	const f32 veltransfer = 1.0f;
+	const f32 veldamp = 1.0f;
+	const f32 dirscale = 1.0f;
+	f32 reactionScale1 = 1.0f;
+	if ( other_island.beached )
+		reactionScale1 *= 2;
+	f32 reactionScale2 = 1.0f;
+	if ( island.beached )
+		reactionScale2 *= 2;
+	const f32 massratio1 = other_island.mass/(island.mass+other_island.mass);
+	const f32 massratio2 = island.mass/(island.mass+other_island.mass);
+	island.vel *= veldamp;
+	other_island.vel *= veldamp;
+	
+	if ( other_island.isStation )
+	{
+		if ( island.beached )
+			island.vel += colvec1 * -vellen * dirscale * veltransfer - colvec1*1.0f;
+		else
+			island.vel += colvec1 * -vellen * dirscale * veltransfer - colvec1*0.4f;
+	}
+	else
+	{
+		island.vel += colvec1 * -other_vellen * dirscale * massratio1 * veltransfer * reactionScale1 - colvec1*0.2f;
+		other_island.vel += colvec2 * -vellen * dirscale * massratio2 * veltransfer * reactionScale2 - colvec2*0.2f;
+	}
+	
+	//effects
+	int shake = (vellen * island.mass + other_vellen * other_island.mass)*0.5f;
+	ShakeScreen( shake, 12, point1 );
+	directionalSoundPlay( shake > 25 ? "WoodHeavyBump" : "WoodLightBump", point1 );
+}
+
+void CollisionResponse2( Island@ island, Island@ other_island, Vec2f point1 )
+{
+	if ( island is null || other_island is null )
+		return;
+		
+	if ( island.mass <= 0 || other_island.mass <= 0 )
+		return;
+	
+	Vec2f velnorm = island.vel; 
+	const f32 vellen = velnorm.Normalize();
+	Vec2f other_velnorm = other_island.vel; 
+	const f32 other_vellen = other_velnorm.Normalize();
+
+	Vec2f colvec1 = point1 - island.pos;
+	Vec2f colvec2 = point1 - other_island.pos;
+	colvec1.Normalize();
+	colvec2.Normalize();
+
+	const f32 veltransfer = 1.0f;
+	const f32 veldamp = 1.0f;
+	const f32 dirscale = 0.1f;
+	const f32 massratio1 = other_island.mass/(island.mass+other_island.mass);
+	const f32 massratio2 = island.mass/(island.mass+other_island.mass);
+	
+	island.vel *= veldamp;
+	other_island.vel *= veldamp;
+	island.pos += -colvec1*0.2f;
+	other_island.pos += -colvec2*0.2f;
+	island.vel += colvec1 * -other_vellen * dirscale * massratio1 * veltransfer - colvec1*0.1f;
+	other_island.vel += colvec2 * -vellen * dirscale * massratio2 * veltransfer - colvec2*0.1f;
+}
+
+void onDie(CBlob@ this)
+{
+	//gib the sprite
+	if (this.getShape().getVars().customData > 0)
+		this.getSprite().Gib();
+
+	if ( getNet().isClient() )
+	{
+		//kill humans standing on top. done locally because lag makes server unable to catch the overlapping playerblobs
+		int type = this.getSprite().getFrame();
+		if ( type != Block::COUPLING && !Block::isRepulsor( type ) )
+		{
+			CBlob@ localBlob = getLocalPlayerBlob();
+			if ( localBlob !is null && localBlob.get_u16( "shipID" ) == this.getNetworkID() )
+			{
+				CPlayer@ player = localBlob.getPlayer();
+				if ( player !is null && localBlob.getDistanceTo( this ) < 6.5f )
+				{
+					player.client_ChangeTeam(44);//this makes the sv kill the playerblob (Respawning.as)
+					localBlob.Tag( "dead" );
+					CSprite@ sprite = localBlob.getSprite();
+					if ( sprite !is null && !sprite.getVars().gibbed )//to mask the latency a bit
+					{
+						directionalSoundPlay( "SR_ManDeath" + ( XORRandom(4) + 1 ), localBlob.getPosition() );
+						sprite.Gib();
+					}
+				}
+			}
+		}
+	}
+	
+	if ( getNet().isServer() && this.hasTag( "seat" ) )
+	{
+		AttachmentPoint@ seat = this.getAttachmentPoint(0);
+		CBlob@ b = seat.getOccupied();
+		if ( b !is null )
+			b.server_Die();
+	}
+}
+
+void Die( CBlob@ this )
+{
+	if(!getNet().isServer()) return;
+	
+	this.Tag( "noCollide" );
+	this.server_Die();
+}
+
+//mothership damage alerts
+f32 onHit( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob@ hitterBlob, u8 customData )
+{
+	if ( this.getTeamNum() != hitterBlob.getTeamNum() && isMothership( this ) )
+	{
+		int teamNum = this.getTeamNum();
+		CRules@ rules = getRules();
+		
+		f32 msDMG = rules.get_f32( "msDMG" + teamNum );
+		if ( msDMG < 8.0f )
+			getRules().set_f32( "msDMG" + teamNum, msDMG + ( this.hasTag( "mothership" ) ? 5.0f : 1.0f ) * damage );
+	}
+	
+	return damage;
+}
+
+//damage layers
+void onHealthChange( CBlob@ this, f32 oldHealth )
+{
+	if ( this.hasTag( "mothership" ) ) return;//has own code
+	
+	int blockType = this.getSprite().getFrame();
+	const f32 hp = this.getHealth();
+	const f32 initHealth = this.getInitialHealth();
+
+	if (hp < 0.0f)
+		this.server_Die();
+	else
+	{
+		//update reclaim status
+		if ( hp < this.get_f32("current reclaim") )
+		{
+			this.set_f32("current reclaim", hp);
+		}
+	
+		//add damage layers
+		f32 step = initHealth / ( DAMAGE_FRAMES + 1 );
+		f32 currentStep = Maths::Floor( oldHealth/step ) * step;
+		
+		if ( hp < currentStep && hp <= initHealth - step && Block::isSolid( blockType ) )
+		{
+			if ( blockType == Block::RAM )
+			{
+				const int frame = (oldHealth > initHealth * 0.5f) ? 9 : 10;	
+				CSprite@ sprite = this.getSprite();
+				CSpriteLayer@ layer = sprite.addSpriteLayer( "dmg"+frame );
+				if (layer !is null)
+				{
+					layer.SetRelativeZ(1+frame);
+					layer.SetLighting( false );
+					layer.SetFrame(frame);
+					layer.RotateBy( XORRandom(4) * 90, Vec2f_zero );
+				}
+			}
+			else if ( blockType != Block::RAMENGINE && blockType != Block::POINTDEFENSE )
+			{
+				const int frame = (oldHealth > initHealth * 0.5f) ? 5 : 6;	
+				CSprite@ sprite = this.getSprite();
+				CSpriteLayer@ layer = sprite.addSpriteLayer( "dmg"+frame );
+				if (layer !is null)
+				{
+					layer.SetRelativeZ(1+frame);
+					layer.SetLighting( false );
+					layer.SetFrame(frame);
+					layer.RotateBy( XORRandom(4) * 90, Vec2f_zero );
 				}
 			}
 
-			if (blob.hasTag("projectile"))
+		    MakeDustParticle( this.getPosition(), "/dust2.png");
+	    }
+		if ( oldHealth >= initHealth*0.80f )
+		{
+			CSprite@ sprite = this.getSprite();
+			for (uint frame = 0; frame < 11; ++frame)
 			{
-				blob.server_Die();
-			}			
+				sprite.RemoveSpriteLayer("dmg"+frame);
+			}
 		}
 	}
 }
 
 void onGib(CSprite@ this)
 {
-	MakeDustParticle( this.getBlob().getPosition(), "/DustSmall.png");
-	this.PlaySound("destroy_wood.ogg");
+	Vec2f pos = this.getBlob().getPosition();
+	MakeDustParticle( pos, "/DustSmall.png");
+	directionalSoundPlay( "destroy_wood", pos );
 }
-
-void onDie(CBlob@ this)
-{
-	// kill humans standing on top
-
-	if (this.getSprite().getFrame() != Block::COUPLING)
-	{
-		CBlob@[] overlapping;
-	    if (this.getOverlapping( @overlapping ))
-	    {
-	        for (uint i = 0; i < overlapping.length; i++)
-	        {
-	            CBlob@ b = overlapping[i];
-	            if ( Characters::isCharacter( b ) &&
-	            	b.getDistanceTo(this) < 6.0f)
-	            {
-	            	b.server_Die();
-	            }
-	        }
-	    }	
-	}
-
-    // check if this was held by somebody - then destroy all other held
-
-	CBlob@ owner = getBlobByNetworkID( this.get_u16( "ownerID" ) );    
-	if (owner !is null)
-	{
-	    CBlob@[]@ blocks;
-	    if (this.get( "blocks", @blocks ))                 
-	    {
-	        for (uint i = 0; i < blocks.length; ++i)
-	        {
-	            CBlob@ b = blocks[i];
-	            b.server_Die();
-	        }
-	        blocks.clear();
-	    }        
-	}
-
-	//gib the sprite
-
-    if (this.getShape().getVars().customData > 0)
-    {
-		this.getSprite().Gib();
-	}
-}
-
-void DieOrBomb( CBlob@ this )
-{
-	if(!getNet().isServer()) return;
-
-	if (this.getSprite().getFrame() == Block::BOMB)
-	{
-		if(!this.hasTag("timer"))
-		{
-			this.SendCommand( this.getCommandID("detonate") );
-		}
-	}
-	else
-	{
-		this.server_Die();
-	}
-}
-
-void CollisionResponse( Island@ island, Island@ other_island, Vec2f point1, bool docking = false )
-{
-	if (island !is null && other_island !is null)
-	{
-		if ( island.mass  == 0 || other_island.mass == 0 ) return;//has happened!
-		
-		Vec2f velnorm = island.vel; 
-		const f32 vellen = velnorm.Normalize();
-		Vec2f other_velnorm = other_island.vel; 
-		const f32 other_vellen = other_velnorm.Normalize();
-
-		Vec2f colvec = point1 - other_island.pos;
-		Vec2f colvec2 = point1 - island.pos;
-		colvec.Normalize();
-		colvec2.Normalize();
-
-		const f32 veltransfer = docking ? 1.0f : 0.45f;//0.35f
-		const f32 veldamp = 0.33f;//0.66f
-		const f32 dirscale = Maths::Min((velnorm*other_velnorm + 1.0f), 1.0f);
-		const f32 massratio = (island.mass > other_island.mass) ? other_island.mass / island.mass : island.mass / other_island.mass;
-		island.vel *= veldamp;
-		other_island.vel *= veldamp;
-		island.vel += other_island.vel * dirscale * (1.0f - massratio) * veltransfer;
-		other_island.vel += island.vel * dirscale * massratio * veltransfer;
-
-		// effects
-
-		int shake = (vellen * island.mass + other_vellen * other_island.mass)*2;
-		ShakeScreen( shake, 12, point1 );
-		Sound::Play( shake > 25 ? "WoodHeavyBump" : "WoodLightBump", point1);
-	} 	
-}
-
-void onHealthChange( CBlob@ this, f32 oldHealth )
-{
-	const f32 hp = this.getHealth();
-	if (hp < 0.0f)
-	{
-		this.server_Die();
-	}
-	else
-	{		
-		// we'll destroy frame used as block type so we add a layer simply
-		if (hp < oldHealth-0.5f && Block::isSolid(this.getSprite().getFrame()))
-		{
-			f32 full_hp = this.getInitialHealth();
-			const int frame = (oldHealth > full_hp * 0.5f) ? 5 : 6;	
-			CSprite@ sprite = this.getSprite();
-		    CSpriteLayer@ layer = sprite.addSpriteLayer( "dmg"+frame );
-		    if (layer !is null)
-		    {
-		    	layer.SetRelativeZ(1+frame);
-		    	layer.SetLighting( false );
-		    	layer.SetFrame(frame);
-		    }	
-
-		    MakeDustParticle( this.getPosition(), "/dust2.png");
-	    }	
-	}	
-}
-
 // network
 
 void onSendCreateData( CBlob@ this, CBitStream@ stream )
-{	 
+{
 	stream.write_u8( Block::getType(this) );
 	stream.write_netid( this.get_u16("ownerID") );
 }
@@ -277,8 +627,7 @@ bool onReceiveCreateData( CBlob@ this, CBitStream@ stream )
 	}
 
 	this.getSprite().SetFrame( type );
-	this.SetMinimapVars("GUI/block_minimap.png", Block::minimapframe(Block::Type(type)), Vec2f(3,3));
-	
+
 	CBlob@ owner = getBlobByNetworkID(ownerID);
 	if (owner !is null)
 	{

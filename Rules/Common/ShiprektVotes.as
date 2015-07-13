@@ -1,10 +1,11 @@
 
-#include "VoteCommon.as"
+#include "ShiprektVoteCommon.as"
 
 //votekick and vote nextmap
 
 const string votekick_id = "vote: kick";
 const string votenextmap_id = "vote: nextmap";
+const string votefreebuild_id = "vote: freebuild";
 
 s32 g_lastVoteCounter = 0;
 bool g_haveStartedVote = false;
@@ -12,6 +13,10 @@ const s32 _required_minutes = 4;
 const s32 _required_time = 60*getTicksASecond()*_required_minutes;
 
 const s32 VoteKickTime = 30*60; //seconds
+
+const u32 BaseEnableTimeSuddenDeath = 10*30*60;//minimum base time. decreases on smaller maps and increases with cores count
+const u32 suddenDeathVoteCooldown = 3*30*60;
+const u32 freeBuildCooldown = 3*30*60;
 
 //kicking related globals and enums
 enum kick_reason {
@@ -22,11 +27,11 @@ enum kick_reason {
 	kick_reason_afk,
 	kick_reason_count,
 };
-string[] kick_reason_string = { "Griefer", "Hacker", "Teamkiller", "Spammer", "AFK" };
+string[] kick_reason_string = {"Griefer", "Hacker", "Teamkiller", "Spammer", "AFK" };
 
 string g_kick_reason = kick_reason_string[kick_reason_griefer]; //default
 
-//kicking related globals and enums
+//nextmap related globals and enums
 enum nextmap_reason {
 	nextmap_reason_ruined = 0,
 	nextmap_reason_stalemate,
@@ -34,7 +39,7 @@ enum nextmap_reason {
 	nextmap_reason_count,
 };
 
-string[] nextmap_reason_string = { "Map Ruined", "Stalemate", "Game Bugged" };
+string[] nextmap_reason_string = {"Map Ruined", "Stalemate", "Game Bugged" };
 
 //set up the ids
 
@@ -42,6 +47,24 @@ void onInit(CRules@ this)
 {
 	this.addCommandID(votekick_id);
 	this.addCommandID(votenextmap_id);
+	this.addCommandID(votefreebuild_id);
+	this.set_s32( "lastSDVote", -suddenDeathVoteCooldown );
+	this.set_s32( "lastFBVote", -freeBuildCooldown );
+	this.set_bool( "freebuild", false );
+}
+
+void onReload(CRules@ this)
+{
+	this.set_s32( "lastSDVote", -suddenDeathVoteCooldown );
+	this.set_s32( "lastFBVote", -freeBuildCooldown );
+	this.set_bool( "freebuild", false );
+}
+ 
+void onRestart(CRules@ this)
+{
+	this.set_s32( "lastSDVote", -suddenDeathVoteCooldown );
+	this.set_s32( "lastFBVote", -freeBuildCooldown );
+	this.set_bool( "freebuild", false );
 }
 
 void onTick(CRules@ this)
@@ -72,7 +95,7 @@ void StartVoteKick(CPlayer@ player, CPlayer@ byplayer, string reason)
 //votekick functor
 
 class VoteKickFunctor : VoteFunctor {
-	VoteKickFunctor() {} //dont use this
+	VoteKickFunctor() {}//dont use this
 	VoteKickFunctor(u16 _playerid, u16 _byid)
 	{
 		playerid = _playerid;
@@ -139,6 +162,7 @@ VoteObject@ Create_Votekick(CPlayer@ player, CPlayer@ byplayer, string reason)
 	vote.succeedaction = "Kick "+ player.getUsername() +"\n(accused "+reason+")";
 	vote.failaction = "Kick "+ byplayer.getUsername() +"\n(started votekick)";
 	vote.byuser = byplayer.getUsername();
+	vote.cancelaction = "Cancel vote.";
 	
 	vote.required_percent = 0.4f;
 	CalculateVoteThresholds(vote);
@@ -149,7 +173,7 @@ VoteObject@ Create_Votekick(CPlayer@ player, CPlayer@ byplayer, string reason)
 }
 
 //VOTE NEXT MAP ----------------------------------------------------------------
-//function to actually start a votekick
+//function to actually start a sudden death
 
 void StartVoteNextMap(CPlayer@ byplayer, string reason)
 {
@@ -166,7 +190,7 @@ void StartVoteNextMap(CPlayer@ byplayer, string reason)
 //nextmap functor
 
 class VoteNextmapFunctor : VoteFunctor {
-	VoteNextmapFunctor() {} //dont use this
+	VoteNextmapFunctor() {}//dont use this
 	VoteNextmapFunctor(CPlayer@ player, string _reason)
 	{
 		playername = player.getUsername();
@@ -177,21 +201,38 @@ class VoteNextmapFunctor : VoteFunctor {
 	string reason;
 	void Pass(bool outcome)
 	{
+		CMap@ map = getMap();
+		f32 mapFactor = Maths::Min( 1.0f, Maths::Sqrt( map.tilemapwidth * map.tilemapheight ) / 300.0f );
+		u32 minTime = Maths::Max( 0, Maths::Round( BaseEnableTimeSuddenDeath * mapFactor ) - getGameTime() );
+		
+		if ( minTime > 0 )	return;//for left-over votes from last round
+			
 		if(outcome)
 		{
-			client_AddToChat( "Vote Next Map Passed!", vote_message_colour() );
+			client_AddToChat( "\n*** Sudden Death Started! Focus on destroying your enemies' engines so they can't escape the Whirlpool!\nPlayers get a huge Booty reward bonus from direct attacks.\nNote: removing heavy blocks from your ship doesn't help! Heavier ships are pulled less by the Whirlpool ***\n", vote_message_colour() );
 		}
 		else
 		{
-			client_AddToChat( "Vote Next Map Failed! ", vote_message_colour() );
-			client_AddToChat( playername+" needs to take a spoonful of cement! (Play on!)", vote_message_colour() );
+			client_AddToChat( "*** Sudden Death Failed! ***", vote_message_colour() );
 		}
 		
 		if(getNet().isServer())
 		{
 			if(outcome)
 			{
-				LoadNextMap();
+				CMap@ map = getMap();
+				Vec2f mapCenter = Vec2f( map.tilemapwidth * map.tilesize/2, map.tilemapheight * map.tilesize/2 );
+				server_CreateBlob( "whirlpool", 0, mapCenter );
+				
+				CBlob@[] stations;
+				getBlobsByTag( "station", @stations );
+				for (uint i = 0; i < stations.length; i++)
+				{
+					CBlob@ station = stations[i];
+					
+					if (station !is null)
+						station.server_Die();
+				}
 			}
 		}
 	}
@@ -208,12 +249,86 @@ VoteObject@ Create_VoteNextmap(CPlayer@ byplayer, string reason)
 		@vote.onvotepassed = f;
 	}
 	
-	vote.succeedaction = "Skip to next map.\n(reason: "+reason+")";
+	vote.succeedaction = "Start Sudden Death?\n(" + reason + ")";
 	vote.failaction = "Do Nothing.";
+	vote.cancelaction = "Cancel vote.";
 	
 	vote.byuser = byplayer.getUsername();
 	
 	vote.required_percent = 0.5f;
+	CalculateVoteThresholds(vote);
+	
+	vote.timeremaining = 600;
+	
+	return vote;
+}
+
+//vote free building
+void StartVoteFreeBuilding(CPlayer@ byplayer, string reason)
+{
+	CRules@ rules = getRules();
+	
+	CBitStream params;
+	
+	params.write_u16(byplayer.getNetworkID());
+	params.write_string(reason);
+	
+	rules.SendCommand(rules.getCommandID(votefreebuild_id), params);
+}
+
+//nextmap functor
+
+class VoteFreeBuildingFunctor : VoteFunctor {
+	VoteFreeBuildingFunctor() {}//dont use this
+	VoteFreeBuildingFunctor(CPlayer@ player, string _reason)
+	{
+		playername = player.getUsername();
+		reason = _reason;
+	}
+	
+	string playername;
+	string reason;
+	void Pass(bool outcome)
+	{
+		CRules@ rules = getRules();
+		bool newFreeState = !rules.get_bool( "freebuild" );
+		if(outcome)
+		{
+			rules.set_bool( "freebuild", newFreeState );
+			if (newFreeState)
+				client_AddToChat( "\n*** Free building mode enabled. Blocks are free! Start a new free building mode vote to return to the normal game mode ***\n", vote_message_colour() );
+			else
+			client_AddToChat( "\n*** Free building mode disabled. Start a new free building mode vote to return to the free building game mode ***\n", vote_message_colour() );
+		}
+		else
+		{
+			client_AddToChat( "*** Free building mode vote Failed! ***", vote_message_colour() );
+		}
+	}
+};
+
+
+//setting up a vote free building object
+VoteObject@ Create_VoteFreeBuilding(CPlayer@ byplayer, string reason)
+{
+	CRules@ rules = getRules();
+	bool newFreeState = !rules.get_bool( "freebuild" );
+	VoteObject vote;
+	
+	{
+		VoteFreeBuildingFunctor f(byplayer, reason);
+		@vote.onvotepassed = f;
+	}
+	if (newFreeState) 
+		vote.succeedaction = "Enable free building mode?\n";
+	else 
+		vote.succeedaction = "Disable free building mode?\n";
+	vote.failaction = "Do Nothing.";
+	vote.cancelaction = "Cancel vote.";
+	
+	vote.byuser = byplayer.getUsername();
+	
+	vote.required_percent = 0.9f;
 	CalculateVoteThresholds(vote);
 	
 	vote.timeremaining = 600;
@@ -256,10 +371,27 @@ void onCommand( CRules@ this, u8 cmd, CBitStream @params )
 		if(!params.saferead_string(reason)) return;
 		
 		CPlayer@ byplayer = getPlayerByNetworkId(byplayerid);
-		
-		if(byplayer !is null)
+		this.set_s32( "lastSDVote", getGameTime() );
+		if( byplayer !is null && !this.get_bool( "whirlpool" ) )
 		{
 			VoteObject@ vote = Create_VoteNextmap(byplayer, reason);
+			
+			Rules_SetVote(this, vote);
+		}
+	}
+	else if(cmd == this.getCommandID(votefreebuild_id))
+	{
+		u16 byplayerid;
+		string reason;
+		
+		if(!params.saferead_u16(byplayerid)) return;
+		if(!params.saferead_string(reason)) return;
+		
+		CPlayer@ byplayer = getPlayerByNetworkId(byplayerid);
+		this.set_s32( "lastFBVote", getGameTime() );
+		if( byplayer !is null)
+		{
+			VoteObject@ vote = Create_VoteFreeBuilding(byplayer, reason);
 			
 			Rules_SetVote(this, vote);
 		}
@@ -316,9 +448,9 @@ void onMainMenuCreated(CRules@ this, CContextMenu@ menu)
 	Menu::addSeparator(menu);
 	
 	//vote options menu
-	
 	CContextMenu@ kickmenu = Menu::addContextMenu(votemenu, "Kick");
-	CContextMenu@ mapmenu = Menu::addContextMenu(votemenu, "SuddenDeath (comming soon!)");
+	CContextMenu@ mapmenu = Menu::addContextMenu(votemenu, "Sudden Death!");
+	CContextMenu@ freebuildingmenu = Menu::addContextMenu(votemenu, "Switch free building mode");
 	Menu::addSeparator(votemenu); //before the back button
 	
 	//kick menu
@@ -355,7 +487,7 @@ void onMainMenuCreated(CRules@ this, CContextMenu@ menu)
 		
 		int _player_team = _player.getTeamNum();
 		if( ( _player_team == p_team || _player_team == SPECTATOR_TEAM ) &&
-			( !getSecurity().checkAccess_Feature( _player, "kick_immunity" ) ) ) //TODO: check seclevs properly
+			( !getSecurity().checkAccess_Feature( _player, "kick_immunity" ) ) )
 		{
 			string descriptor = _player.getCharacterName();
 
@@ -390,23 +522,62 @@ void onMainMenuCreated(CRules@ this, CContextMenu@ menu)
 	Menu::addSeparator(kickmenu);
 	
 	//nextmap menu
+	CMap@ map = getMap();
+	CBlob@[] cores;
+	getBlobsByTag( "mothership", @cores );
+	f32 coresTime = 2.5f * ( cores.length - 2 ) * 30 * 60;
+	f32 mapFactor = Maths::Min( 1.0f, Maths::Sqrt( map.tilemapwidth * map.tilemapheight ) / 300.0f );
+	u32 minTime = Maths::Max( 0, Maths::Round( BaseEnableTimeSuddenDeath * mapFactor + coresTime ) - getGameTime() );
+	u32 coolDown = Maths::Max( 0, suddenDeathVoteCooldown - ( getGameTime() - this.get_s32( "lastSDVote" ) ) );
 	
-	/*Menu::addInfoBox(mapmenu, "Vote Next Map", "Vote to change the map\nto the next in cycle.\n\n"+
-											"- report any abuse of this feature.\n"+
-											"\nTo Use:\n\n"+
-											"- select a reason from the list.\n"+
-											"- everyone votes.\n");
+	u32 timeToEnable = minTime + coolDown;
+	bool whirlpool = this.get_bool( "whirlpool" );
 	
-	Menu::addSeparator(mapmenu);
-	//reasons
-	for(uint i = 0 ; i < nextmap_reason_count; ++i)
+	string desc = "Match taking too long? Vote for Sudden Death!\n";
+	if ( whirlpool )
+		desc = "Sudden Death is already active!";
+	else if ( timeToEnable > 0 )
+		desc += timeToEnable > 30*60 ? ( "Time left to enable: " + ( 1 + timeToEnable/30/60 ) +  " minute(s)." ) : ( "Time left to enable: " + timeToEnable/30 + " second(s)." );
+		
+	Menu::addInfoBox(mapmenu, "Vote Sudden Death", desc );
+
+	if ( timeToEnable == 0 && !whirlpool )
 	{
+		Menu::addSeparator(mapmenu);
+		//reason
 		CBitStream params;
-		params.write_u8(i);
-		Menu::addContextItemWithParams(mapmenu, nextmap_reason_string[i], "DefaultVotes.as", "Callback_NextMap", params);
+		params.write_u8(1);
+		Menu::addContextItemWithParams(mapmenu, "Speed things up!", "ShiprektVotes.as", "Callback_NextMap", params);
+		
+		Menu::addSeparator(mapmenu);
 	}
 	
-	Menu::addSeparator(mapmenu);*/
+	//vote free building mode
+	u32 coolDownFb = Maths::Max( 0, freeBuildCooldown - ( getGameTime() - this.get_s32( "lastFBVote" ) ) );
+	
+	bool freebuildstate = this.get_bool( "freebuild" );
+	
+	string nameFb = "Enable Free building mode\n";
+	if (freebuildstate) nameFb = "Disable Free building mode\n";
+	
+	string descFb = "Vote to switch the free building mode.";
+	if ( coolDownFb > 0 ) 
+	{
+		descFb = coolDownFb > 30*60 ? ( "Time left to switch again: " + ( 1 + coolDownFb/30/60 ) +  " minute(s)." ) : ( "Time left to switch again: " + coolDownFb/30 + " second(s)." );
+	}
+	
+	Menu::addInfoBox(freebuildingmenu, nameFb, descFb );
+
+	if ( coolDownFb == 0 )
+	{
+		Menu::addSeparator(freebuildingmenu);
+		//reason
+		CBitStream params;
+		params.write_u8(1);
+		Menu::addContextItemWithParams(freebuildingmenu, "Yes", "ShiprektVotes.as", "Callback_FreeBuilding", params);
+		
+		Menu::addSeparator(freebuildingmenu);
+	}
 }
 
 void _CloseMenu()
@@ -463,7 +634,20 @@ void Callback_NextMap(CBitStream@ params)
 		reason = nextmap_reason_string[id];
 	}
 	
-	StartVoteNextMap(p, reason);
+	StartVoteNextMap(p, "Speed things up!");
+	onPlayerStartedVote();
+}
+
+void Callback_FreeBuilding(CBitStream@ params)
+{
+	_CloseMenu(); //definitely close the menu
+	
+	CPlayer@ p = getLocalPlayer();
+	if(p is null) return;
+	
+	u8 id; if(!params.saferead_u8(id)) return;
+	
+	StartVoteFreeBuilding(p, "For fun!");
 	onPlayerStartedVote();
 }
 
@@ -487,6 +671,9 @@ void onPlayerLeave( CRules@ this, CPlayer@ player )
 				}
 			}
 		}
+	}
+	if (getPlayersCount() == 0) {
+		this.set_bool( "freebuild", false );
 	}
 }
 

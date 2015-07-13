@@ -12,17 +12,25 @@ void onTick( CSprite@ this )
 	if (blob.isAttached())
 	{
 		this.SetAnimation("default");
-	}	
+	}
 	else if(solidGround)
 	{
 		if (this.isAnimationEnded() ||
 			!(this.isAnimation("punch1") || this.isAnimation("punch2") || this.isAnimation("shoot")) )
 		{
-			if (blob.isKeyPressed( key_action2 ) && canShoot( blob ) && !blob.isKeyPressed( key_action1 ))
+			if (blob.isKeyPressed( key_action2 ) && canShootPistol( blob ) && !blob.isKeyPressed( key_action1 ))
 			{
 				this.SetAnimation("shoot");
 			}
-			else if (blob.isKeyPressed( key_action1 ) )//todo: && canPunch( blob ))
+			else if (blob.isKeyPressed( key_action2 ) && (blob.get_string( "current tool" ) == "deconstructor") && !blob.isKeyPressed( key_action1 ))
+			{
+				this.SetAnimation("reclaim");
+			}
+			else if (blob.isKeyPressed( key_action2 ) && (blob.get_string( "current tool" ) == "reconstructor") && !blob.isKeyPressed( key_action1 ))
+			{
+				this.SetAnimation("repair");
+			}
+			else if (blob.isKeyPressed( key_action1 ) )
 			{
 				this.SetAnimation("punch"+(_punchr.NextRanged(2)+1));
 			}
@@ -39,10 +47,19 @@ void onTick( CSprite@ this )
 		if (this.isAnimationEnded() ||
 			!(this.isAnimation("shoot")) )
 		{
-			if (blob.getShape().vellen > 0.1f) {
+			if (blob.isKeyPressed( key_action2 ) && (blob.get_string( "current tool" ) == "deconstructor") )
+			{
+					this.SetAnimation("reclaim");
+			}
+			else if (blob.isKeyPressed( key_action2 ) && (blob.get_string( "current tool" ) == "reconstructor") )
+			{
+					this.SetAnimation("repair");
+			}
+			else if (blob.getShape().vellen > 0.1f) {
 				this.SetAnimation("swim");
 			}
-			else if (blob.isKeyPressed( key_action2 ) && canShoot( blob )){
+			else if (blob.isKeyPressed( key_action2 ) && canShootPistol( blob ))
+			{
 					this.SetAnimation("shoot");
 			}
 			else {
@@ -51,5 +68,5 @@ void onTick( CSprite@ this )
 		}
 	}
 
-	this.SetZ( 100.0f );
+	this.SetZ( 540.0f );
 }

@@ -1,14 +1,14 @@
 #include "MakeBlock.as"
 
-Block::Type[] pool =		{ Block::PLATFORM,
+Block::Type[] pool =		{Block::PLATFORM,
 							  //Block::PLATFORM2, 
 							  Block::SOLID,
 							  Block::BOMB,
 							  Block::SEAT,
 							  Block::PROPELLER,
-							  Block::TURRET};//,							  Block::COUPLING };
+							  Block::FLAK};//,							  Block::COUPLING };
 
-f32[] weights = 			{ 2.2f,
+f32[] weights = 			{2.2f,
 							  0.7f, 
 							  1.2f,
 							  0.2f,
@@ -37,31 +37,9 @@ void Reseed()
 
 void MakeBlock( Block::Type type, Vec2f offset, Vec2f pos, CBlob@[]@ list, const uint team )
 {
-	CBlob@ b = makeBlock( pos + offset*Block::size, type, team );
+	CBlob@ b = makeBlock( pos + offset*Block::size, 0.0f, type, team );
 	list.push_back(b);
-	b.set_Vec2f("offset", b.getPosition() );
-	switch(type)		
-	{
-		case Block::PROPELLER:
-		b.AddScript("Propeller.as");
-		break;
-		case Block::SEAT:
-		b.AddScript("GetInSeat.as"); // so oninit doesnt override
-		b.AddScript("Seat.as");
-		break;
-		case Block::BOMB:
-		b.AddScript("Bomb.as");
-		break;			
-		case Block::TURRET:
-		b.AddScript("Turret.as");
-		break;
-		case Block::COUPLING:
-		b.AddScript("Coupling.as");
-		break;
-		case Block::AUTOCANNON_F:
-		b.AddScript("Autocannon_F.as");
-		break;
-	}
+	b.set_Vec2f("offset", b.getPosition());
 }
 
 //Below unused by Shiprekt+
@@ -77,7 +55,7 @@ void MakeRandomBlocks( const int blocksCount, Vec2f pos, CBlob@[]@ list, const u
 	Block::Type[] types;
 	getRandomBlockTypes( @types, team );
 	getRandomBlockShape( @offsets, blocksCount, team );
-	if (blocksCount > 1 && blocksCount <= 4){		
+	if (blocksCount > 1 && blocksCount <= 4){
 		MakeMultiBlock( @types, @offsets, pos, list, blocksCount, team );
 	}
 	else {
@@ -233,5 +211,5 @@ void getRandomBlockShape( Vec2f[]@ offsets, const int blocksCount, int team )
 			offsets.push_back(Vec2f(1, 0));
 			break;
 		}
-	}	
+	}
 }

@@ -1,15 +1,15 @@
 #include "WaterEffects.as"
-
-#include "Characters.as"
+#include "Booty.as"
+#include "AccurateSoundPlay.as"
 
 const f32 SHARK_SPEED = 0.75f;
-f32 zoom = 1.0f;
-const f32 ZOOM_SPEED = 0.2f;
 
 void onInit( CBlob@ this )
 {
 	//find target to swim towards
 	this.set_Vec2f("target", getTargetVel( this ) * 0.5f);
+	
+	this.set_bool("retreating", false);
 
 	CSprite@ sprite = this.getSprite();
 	sprite.SetZ(-10.0f);
@@ -22,7 +22,15 @@ void onInit( CBlob@ this )
 }
 
 void onTick( CBlob@ this )
-{	
+{
+	Vec2f pos = this.getPosition();	
+	CMap@ map = getMap();
+	Tile tile = map.getTile( pos );
+	bool onLand = map.isTileBackgroundNonEmpty( tile ) || map.isTileSolid( tile );
+	
+	if ( onLand )
+		this.set_bool("retreating", true);
+
 	if (this.getPlayer() is null)
 	{
 		u32 ticktime = (getGameTime() + this.getNetworkID());
@@ -39,8 +47,14 @@ void onTick( CBlob@ this )
 		{
 			this.set_Vec2f("target", getTargetVel( this ));
 		}
-
-		MoveTo( this, this.get_Vec2f("target") );
+		
+		if ( !this.get_bool("retreating") )
+			MoveTo( this, this.get_Vec2f("target") );
+		else
+		{
+			MoveTo( this, -this.get_Vec2f("target") );
+			this.Tag("vanish");
+		}
 	}
 	else
 	{
@@ -63,9 +77,6 @@ void onTick( CBlob@ this )
 
 		if (this.isMyPlayer())
 		{
-			HandleZoom( this );
-
-
 		    if (getHUD().hasButtons())
 		    {
 		        if (this.isKeyJustPressed(key_action1))
@@ -73,7 +84,7 @@ void onTick( CBlob@ this )
 				    CGridMenu @gmenu;
 				    CGridButton @gbutton;
 				    this.ClickGridMenu(0, gmenu, gbutton); 
-			    }	
+			    }
 			}
 		}
 		this.getSprite().SetAnimation("default");
@@ -90,7 +101,7 @@ void onTick( CSprite@ this )
 		this.SetAnimation("default");
 
 
-	if(blob.hasTag("vanish"))
+	if( blob.hasTag("vanish"))
 		this.SetAnimation("in");
 }
 
@@ -123,12 +134,12 @@ Vec2f getTargetVel( CBlob@ this )
 	Vec2f target = this.getVelocity();
 	int humansInWater = 0;
 	if (getMap().getBlobsInRadius( pos, 150.0f, @blobsInRadius ))
-	{		
+	{
 		f32 maxDistance = 9999999.9f;
 		for (uint i = 0; i < blobsInRadius.length; i++)
 		{
 			CBlob @b = blobsInRadius[i];
-			if (!b.isOnGround() && Characters::isCharacter( b ))
+			if (!b.isOnGround() && b.getName() == "human")
 			{
 				humansInWater++;
 				f32 dist = (pos - b.getPosition()).getLength();
@@ -162,20 +173,22 @@ void onCollision( CBlob@ this, CBlob@ blob, bool solid, Vec2f normal, Vec2f poin
 		return;
 	}
 
-	if (Characters::isCharacter( blob ) && !blob.isOnGround())
+	if ( blob.getName() == "human" && !blob.get_bool( "onGround" ) )
 	{
-		MakeWaterParticle(this.getPosition(), Vec2f_zero); 		
-		this.getSprite().PlaySound("ZombieBite");
+		MakeWaterParticle(point1, Vec2f_zero); 
+		directionalSoundPlay( "ZombieBite", point1 );		
 		blob.server_Die();
 		this.server_Die();
 	}
 }
 
 void onSetPlayer( CBlob@ this, CPlayer@ player )
-{	
+{
+	this.Untag( "vanish" );
 	if (player !is null && player.isMyPlayer()) // setup camera to follow
 	{
 		CCamera@ camera = getCamera();
+		camera.setRotation(0);
 		camera.mousecamstyle = 1; // follow
 		camera.targetDistance = 1.0f; // zoom factor
 		camera.posLag = 5; // lag/smoothen the movement of the camera
@@ -184,20 +197,22 @@ void onSetPlayer( CBlob@ this, CPlayer@ player )
 	}
 }
 
-void HandleZoom( CBlob@ this )
-{
-  	if (this.isKeyJustPressed(key_zoomout)){
-  		zoom = 0.5f;
-  	}
-  	else if (this.isKeyJustPressed(key_zoomin)){
-  		zoom = 1.0f;
-  	}
 
-	CCamera@ camera = getCamera();
-	if (zoom == 1.0f)	{
-		if (camera.targetDistance < zoom)
-			camera.targetDistance += ZOOM_SPEED;		
+f32 onHit( CBlob@ this, Vec2f worldPoint, Vec2f velocity, f32 damage, CBlob@ hitterBlob, u8 customData )
+{
+	if ( this.getHealth() - damage <= 0 && hitterBlob.getName() == "bullet" )
+	{
+		CPlayer@ owner = hitterBlob.getDamageOwnerPlayer();
+		if ( owner !is null )
+		{
+			string pName = owner.getUsername();
+			if ( owner.isMyPlayer() )
+				directionalSoundPlay( "coinpick.ogg", worldPoint, 0.75f );
+
+			if ( getNet().isServer() )
+				server_setPlayerBooty( pName, server_getPlayerBooty( pName ) + 10 );
+		}
 	}
-	else if (camera.targetDistance > zoom)	
-		camera.targetDistance -= ZOOM_SPEED;	
+	
+	return damage;
 }

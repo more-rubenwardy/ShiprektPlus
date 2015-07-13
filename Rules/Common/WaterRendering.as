@@ -1,6 +1,7 @@
 #define CLIENT_ONLY
 
 #include "WaterEffects.as"
+#include "TileCommon.as"
 
 Random _r(157681529);
 Vec2f wind_direction;
@@ -15,8 +16,14 @@ void onTick( CRules@ this )
 		CCamera@ camera = getCamera();
 		Driver@ d = getDriver();
 		if(camera is null || d is null) return;
-
+		
 		Vec2f wavepos = camera.getPosition() + Vec2f( -d.getScreenWidth()/2 + _r.NextRanged(d.getScreenWidth()), -d.getScreenHeight()/2 + _r.NextRanged(d.getScreenHeight()) );
-		MakeWaterWave(wavepos, wind_direction, wind_direction.Angle() );
+		CBlob@ whirlpool = getBlobByName( "whirlpool" );
+		
+		if ( whirlpool is null || ( whirlpool.getPosition() - wavepos ).Length() > 250.0f )
+		{
+			if ( isInWater ( wavepos ) )
+				MakeWaterWave(wavepos, wind_direction, wind_direction.Angle() );
+		}
 	}
 }

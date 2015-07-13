@@ -8,7 +8,7 @@ void onGib(CSprite@ this)
 	u8 frame = this.getFrame();
 
 	//no gibs tiles
-	if(frame == Block::COUPLING)
+	if( frame == Block::COUPLING || Block::isRepulsor( frame ) )
 		return;
 
     CBlob@ blob = this.getBlob();

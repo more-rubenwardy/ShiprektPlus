@@ -4,11 +4,11 @@
 
 const int SECS_TO_SHARK = 3;
 const f32 SHARK_SPAWN_RADIUS = 126.0f;
-const int MAX_SHARKS_AREA = 2;
+const int MAX_SHARKS_AREA = 20;
 
 void onTick( CRules@ this )
-{		
-	if (getGameTime() % 90 != 0)
+{
+	if ( getGameTime() % 90 != 0 || getRules().get_bool( "whirlpool" ) )
 		return;
 
 	CBlob@[] humans;
@@ -16,7 +16,7 @@ void onTick( CRules@ this )
 	for (uint i=0; i < humans.length; i++)
 	{
 		CBlob@ human = humans[i];		
-		if (!human.isOnGround())
+		if (!human.get_bool( "onGround" ))
 		{
 			SpawnShark( this, human.getPosition() );
 		}

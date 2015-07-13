@@ -14,6 +14,12 @@ namespace Human
 	    this.get( "blocks", @blob_blocks );
 	    return blob_blocks.length > 0;
 	}
+	
+	bool wasHoldingBlocks( CBlob@ this )
+	{
+		return getGameTime() - this.get_u32( "placedTime" ) < 10;
+	}
+	
 	void clearHeldBlocks( CBlob@ this )
 	{
 		CBlob@[]@ blocks;
@@ -21,10 +27,11 @@ namespace Human
 		{
 			for (uint i = 0; i < blocks.length; ++i)
 			{
-				CBlob@ b = blocks[i];
-				b.server_Die();
+				blocks[i].Tag( "disabled" );
+				blocks[i].server_Die();
 			}
+
 			blocks.clear();
-		} 
+		}
 	}
 }

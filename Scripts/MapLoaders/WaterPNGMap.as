@@ -29,7 +29,7 @@ class PNGLoader
 		{
 			CMap::SetupMap( map, 0, 0 );
 			return true;
-		}else
+		} else
 			SetupBooty( getRules() );
 
 		@image = CFileImage( filename );		
@@ -41,7 +41,8 @@ class PNGLoader
 			{
 				SColor pixel = image.readPixel();
 				int offset = image.getPixelOffset();
-				CMap::handlePixel( map,pixel, offset );
+				Vec2f pixelPos = image.getPixelPosition();
+				CMap::handlePixel( map, image, pixel, offset, pixelPos );
 				getNet().server_KeepConnectionsAlive();
 			}
 
