@@ -4,6 +4,16 @@ Version v11
 
 License: WTFPL or CC0.
 
+[Shiprekt+ on KAG Resources](https://forum.kag2d.com/resources/shiprekt-plus.234/)
+
+# Installation
+
+* Download and extract this zip to KAG/Mods/Shiprekt+v11
+* The README.md should now be at KAG/Mods/Shiprekt+v11/README.md
+* Add `Shiprekt+v11` to mods.cfg
+* Set `sv_gamemode` to `TDM` in autoconfig.cfg
+* Run a server: ./KAGdedi autostart Scripts/server_autostart.as autoconfig autoconfig.cfg
+
 # Changes
 
 ## Features
